@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Satpam Lapak Gatcha</title>
+  <style>
+    :root {
+      --ink: #17201c;
+      --muted: #5e6a62;
+      --line: #d8ded8;
+      --panel: #ffffff;
+      --soft: #f5f7f3;
+      --green: #1f8a5b;
+      --teal: #0b7894;
+      --amber: #c17708;
+      --red: #b94242;
+      --black: #101413;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #eef2ee;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: var(--black);
+      color: #f6fbf7;
+      padding: 28px 22px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #e8f6ee;
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 20px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.15;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: #aeb9b0;
+      font-size: 13px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav a {
+      color: #dfe8e1;
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav a:hover {
+      background: rgba(255, 255, 255, .08);
+    }
+
+    .sideStat {
+      margin-top: auto;
+      border-top: 1px solid rgba(255, 255, 255, .14);
+      padding-top: 20px;
+      display: grid;
+      gap: 14px;
+      color: #d2ddd4;
+      font-size: 13px;
+    }
+
+    .sideStat strong {
+      display: block;
+      color: #fff;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    main {
+      padding: 28px;
+      display: grid;
+      gap: 22px;
+    }
+
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      min-height: 390px;
+    }
+
+    .heroCopy {
+      padding: 38px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+    }
+
+    .eyebrow {
+      color: var(--green);
+      font-weight: 800;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 64px);
+      line-height: .96;
+      max-width: 760px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+      max-width: 710px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      min-height: 42px;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 750;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .button.primary {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+
+    .visual {
+      background: #f8faf7;
+      border-left: 1px solid var(--line);
+      padding: 28px;
+      display: grid;
+      align-content: center;
+      gap: 14px;
+    }
+
+    .phone {
+      max-width: 390px;
+      width: 100%;
+      margin: 0 auto;
+      border: 10px solid #1b221f;
+      border-radius: 28px;
+      background: #e9f1ec;
+      box-shadow: 0 18px 44px rgba(20, 30, 24, .18);
+      overflow: hidden;
+    }
+
+    .phoneTop {
+      height: 48px;
+      background: #1b221f;
+      color: #ecf5ef;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .chat {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+      min-height: 360px;
+    }
+
+    .bubble {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid #dbe4dd;
+      font-size: 13px;
+      line-height: 1.45;
+      box-shadow: 0 6px 16px rgba(40, 60, 48, .08);
+    }
+
+    .bubble.user {
+      justify-self: end;
+      background: #dff2e7;
+      max-width: 78%;
+    }
+
+    .bubble.warn {
+      border-left: 4px solid var(--red);
+    }
+
+    .inlineKeys {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .inlineKeys span {
+      border: 1px solid #b8d1c3;
+      background: #edf7f1;
+      border-radius: 6px;
+      min-height: 34px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .stats {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .metric {
+      display: grid;
+      gap: 8px;
+      min-height: 138px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .metric strong {
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .metric p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .sectionHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 20px;
+    }
+
+    .sectionHeader h3 {
+      margin: 0;
+      font-size: 25px;
+    }
+
+    .sectionHeader p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.55;
+    }
+
+    .twoCol {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .topic {
+      display: grid;
+      gap: 14px;
+    }
+
+    .topicTitle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .topicTitle h4 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 800;
+      background: #edf6f2;
+      color: var(--green);
+      border: 1px solid #cbe2d6;
+      white-space: nowrap;
+    }
+
+    .topic ul {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 9px;
+      list-style: none;
+    }
+
+    .topic li {
+      display: flex;
+      gap: 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex: 0 0 8px;
+      margin-top: 8px;
+    }
+
+    .flow {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .step {
+      min-height: 168px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      border-top: 4px solid var(--teal);
+    }
+
+    .step:nth-child(2) {
+      border-top-color: var(--amber);
+    }
+
+    .step:nth-child(3) {
+      border-top-color: var(--red);
+    }
+
+    .step:nth-child(4) {
+      border-top-color: var(--green);
+    }
+
+    .step b {
+      font-size: 18px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table th,
+    .table td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 16px;
+      font-size: 14px;
+    }
+
+    .table th {
+      color: var(--muted);
+      background: #f8faf7;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 8px 0 20px;
+    }
+
+    @media (max-width: 1060px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .visual {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .stats,
+      .flow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 16px;
+      }
+
+      .heroCopy,
+      .visual {
+        padding: 22px;
+      }
+
+      .stats,
+      .twoCol,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .sectionHeader {
+        display: grid;
+      }
+
+      .table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">G</div>
+        <div>
+          <h1>Satpam Lapak Gatcha</h1>
+          <p>Telegram moderation bot</p>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Page sections">
+        <a href="#overview">Overview <span>01</span></a>
+        <a href="#rules">Rules <span>02</span></a>
+        <a href="#stats">Stats <span>03</span></a>
+        <a href="#commands">Commands <span>04</span></a>
+      </nav>
+
+      <div class="sideStat">
+        <div>
+          <strong>23,324</strong>
+          total Telegram members
+        </div>
+        <div>
+          <strong>2</strong>
+          monitored marketplace topics
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <section class="hero" id="overview">
+        <div class="heroCopy">
+          <div class="eyebrow">www.Gatcha.org · @trick_ngirit</div>
+          <h2>Moderation dashboard for the Gatcha Telegram group.</h2>
+          <p>
+            Satpam Lapak Gatcha keeps marketplace topics readable by limiting each user to two posts per day
+            in monitored Lapak topics, deleting excess messages, mentioning violators, and retaining moderation
+            stats in SQLite.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://t.me/trick_ngirit">Open Telegram Group</a>
+            <a class="button" href="https://www.Gatcha.org">Visit Gatcha.org</a>
+          </div>
+        </div>
+
+        <div class="visual" aria-label="Telegram bot moderation preview">
+          <div class="phone">
+            <div class="phoneTop">
+              <span>Gatcha Moderation</span>
+              <span>online</span>
+            </div>
+            <div class="chat">
+              <div class="bubble user">Lapak Digital post #3 from the same user today</div>
+              <div class="bubble warn">
+                <b>Satpam Lapak Gatcha</b><br>
+                @member Limit Lapak Member: setiap user maksimal 2 pesan per hari.
+              </div>
+              <div class="bubble">
+                <b>Tangkapan Satpam hari ini</b><br>
+                Lapak Digital: 1 user kena warning<br>
+                Lapak Fisik: 0 user kena warning
+              </div>
+              <div class="inlineKeys">
+                <span>Ringkasan</span>
+                <span>Leaderboard</span>
+                <span>Total</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid stats" id="stats">
+        <div class="card metric">
+          <span>Total Members</span>
+          <strong>23,324</strong>
+          <p>Current Gatcha Telegram community size provided for this dashboard.</p>
+        </div>
+        <div class="card metric">
+          <span>Daily Post Limit</span>
+          <strong>2x</strong>
+          <p>Each user can post twice per monitored topic each calendar day.</p>
+        </div>
+        <div class="card metric">
+          <span>Warning Cooldown</span>
+          <strong>300s</strong>
+          <p>Repeated spam is deleted, but warning replies are throttled per user and topic.</p>
+        </div>
+        <div class="card metric">
+          <span>Storage</span>
+          <strong>SQLite</strong>
+          <p>Daily counters, warnings, and total reports are retained locally.</p>
+        </div>
+      </section>
+
+      <section class="section" id="rules">
+        <div class="sectionHeader">
+          <h3>Monitored Topics</h3>
+          <p>The bot only enforces rules inside the configured Lapak Member topics in the Gatcha Telegram group. Messages outside these topics are not counted by this rule.</p>
+        </div>
+
+        <div class="grid twoCol">
+          <div class="card topic">
+            <div class="topicTitle">
+              <h4>Lapak Digital</h4>
+              <span class="pill">topic 3282669</span>
+            </div>
+            <ul>
+              <li><span class="dot"></span><span>Daily user post limit: 2 messages.</span></li>
+              <li><span class="dot"></span><span>Third and later messages are deleted.</span></li>
+              <li><span class="dot"></span><span>Violators are mentioned in a warning reply.</span></li>
+            </ul>
+          </div>
+
+          <div class="card topic">
+            <div class="topicTitle">
+              <h4>Lapak Fisik</h4>
+              <span class="pill">topic 4226256</span>
+            </div>
+            <ul>
+              <li><span class="dot"></span><span>Daily user post limit: 2 messages.</span></li>
+              <li><span class="dot"></span><span>Sender-tagged users or messages are whitelisted.</span></li>
+              <li><span class="dot"></span><span>Reports are available through the /satpam inline buttons.</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="sectionHeader">
+          <h3>Moderation Flow</h3>
+          <p>Satpam Lapak Gatcha runs as a Telegram bot and reacts to incoming messages in the monitored topic IDs.</p>
+        </div>
+
+        <div class="grid flow">
+          <div class="card step">
+            <b>1. Watch topics</b>
+            <p>Only messages from the configured Gatcha chat and topic IDs are evaluated.</p>
+          </div>
+          <div class="card step">
+            <b>2. Count daily posts</b>
+            <p>Each user has an independent daily counter per monitored topic.</p>
+          </div>
+          <div class="card step">
+            <b>3. Enforce limit</b>
+            <p>Messages beyond the second post are deleted and recorded as violations.</p>
+          </div>
+          <div class="card step">
+            <b>4. Report stats</b>
+            <p>/satpam opens summary, leaderboard, and total stats through inline buttons.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="commands">
+        <div class="sectionHeader">
+          <h3>Bot Commands And Stats</h3>
+          <p>The bot currently exposes one command. Its inline keyboard switches between today-only data and retained totals from SQLite.</p>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Command or View</th>
+              <th>What It Shows</th>
+              <th>Scope</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>/satpam</td>
+              <td>Tangkapan Satpam hari ini: unique warned users per topic</td>
+              <td>Today only</td>
+            </tr>
+            <tr>
+              <td>Leaderboard</td>
+              <td>Users who violated the rule and how many excess messages they sent</td>
+              <td>Today only</td>
+            </tr>
+            <tr>
+              <td>Total</td>
+              <td>All retained warned users and violation counts per topic</td>
+              <td>SQLite history</td>
+            </tr>
+            <tr>
+              <td>Ringkasan</td>
+              <td>Returns the report message to the /satpam summary</td>
+              <td>Today only</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <p class="footer">
+        Static page generated for Satpam Lapak Gatcha. Runtime statistics are stored by the bot in
+        <code>runtime/lapak-member-limits.sqlite</code>; connect this page to a backend endpoint if live database values are required.
+      </p>
+    </main>
+  </div>
+</body>
+</html>
