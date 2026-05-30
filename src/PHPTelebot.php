@@ -36,6 +36,10 @@ class PHPTelebot
      */
     protected $_messageThreadLimits = [];
     /**
+     * @var array
+     */
+    protected $_chatMessageStats = [];
+    /**
      * Bot token.
      *
      * @var string
@@ -237,6 +241,66 @@ class PHPTelebot
     }
 
     /**
+     * Track received message volume for a chat.
+     *
+     * @param int|string $chatId
+     * @param string     $storagePath
+     */
+    public function trackChatMessageStats($chatId, $storagePath = '')
+    {
+        $this->_chatMessageStats[] = [
+            'chat_id' => (string) $chatId,
+            'storage_path' => $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.sqlite',
+        ];
+    }
+
+    /**
+     * Get received message volume stats for a chat.
+     *
+     * @param int|string $chatId
+     * @param string     $storagePath
+     * @param string     $day
+     *
+     * @return array
+     */
+    public function chatMessageStats($chatId, $storagePath = '', $day = '')
+    {
+        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.sqlite';
+        $day = $day != '' ? $day : date('Y-m-d');
+        $db = $this->threadLimitDatabase($path);
+
+        $stmt = $db->prepare('SELECT COALESCE(SUM(count), 0) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$day, (string) $chatId]);
+        $today = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(*) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$day, (string) $chatId]);
+        $activeHours = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COALESCE(MAX(count), 0) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$day, (string) $chatId]);
+        $peakHour = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COALESCE(SUM(count), 0) FROM group_message_stats WHERE chat_id = ?');
+        $stmt->execute([(string) $chatId]);
+        $total = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(DISTINCT day) FROM group_message_stats WHERE chat_id = ?');
+        $stmt->execute([(string) $chatId]);
+        $days = (int) $stmt->fetchColumn();
+
+        return [
+            'today' => $today,
+            'total' => $total,
+            'active_hours_today' => $activeHours,
+            'avg_per_active_hour_today' => $activeHours > 0 ? $today / $activeHours : 0,
+            'avg_per_day' => $days > 0 ? $total / $days : 0,
+            'peak_hour_today' => $peakHour,
+            'stored_days' => $days,
+        ];
+    }
+
+    /**
      * Run telebot.
      *
      * @return bool
@@ -336,6 +400,8 @@ class PHPTelebot
         if (isset($message['date']) && $message['date'] < (time() - 120)) {
             return '-- Pass --';
         }
+
+        $this->recordChatMessageStats($message);
 
         $limitResponse = $this->enforceMessageThreadLimits($message);
         if ($limitResponse !== false) {
@@ -477,6 +543,33 @@ class PHPTelebot
         }
 
         return false;
+    }
+
+    /**
+     * Record received message volume for configured chats.
+     *
+     * @param array $message
+     */
+    private function recordChatMessageStats($message)
+    {
+        if (empty($this->_chatMessageStats) || Bot::updateType() != 'message' || !isset($message['chat']['id'])) {
+            return;
+        }
+
+        foreach ($this->_chatMessageStats as $config) {
+            if ((string) $message['chat']['id'] != $config['chat_id']) {
+                continue;
+            }
+
+            $db = $this->threadLimitDatabase($config['storage_path']);
+            $time = isset($message['date']) ? $message['date'] : time();
+            $day = date('Y-m-d', $time);
+            $hour = date('H:00', $time);
+            $stmt = $db->prepare('INSERT OR IGNORE INTO group_message_stats (day, hour, chat_id, count) VALUES (?, ?, ?, 0)');
+            $stmt->execute([$day, $hour, $config['chat_id']]);
+            $stmt = $db->prepare('UPDATE group_message_stats SET count = count + 1 WHERE day = ? AND hour = ? AND chat_id = ?');
+            $stmt->execute([$day, $hour, $config['chat_id']]);
+        }
     }
 
     /**
@@ -700,6 +793,14 @@ class PHPTelebot
             PRIMARY KEY (day, chat_id, thread_id, user_id)
         )');
         $db->exec('CREATE INDEX IF NOT EXISTS idx_message_thread_limits_topic ON message_thread_limits (chat_id, thread_id)');
+        $db->exec('CREATE TABLE IF NOT EXISTS group_message_stats (
+            day TEXT NOT NULL,
+            hour TEXT NOT NULL,
+            chat_id TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (day, hour, chat_id)
+        )');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_group_message_stats_chat ON group_message_stats (chat_id, day)');
         $this->migrateThreadLimitJsonStorage($db, $path);
 
         return $db;

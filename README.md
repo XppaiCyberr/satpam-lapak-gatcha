@@ -20,6 +20,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 ```
 
 - Stores daily counters locally in SQLite at `runtime/lapak-member-limits.sqlite`.
+- Stores received group message volume per hour in SQLite for dashboard averages.
 - Tracks the number of unique users who received warnings in each monitored topic.
 - Provides `/satpam` to report today's warning totals per topic.
 - Adds inline buttons to `/satpam` for switching between today's summary, today's violation leaderboard, and retained total data.
@@ -163,7 +164,7 @@ Lapak Fisik: 1 user, 2 pelanggaran
 
 ## Web Stats Page
 
-`page.php` displays a browser dashboard for Satpam Lapak Gatcha and reads live stats from `runtime/lapak-member-limits.sqlite`. It shows the Gatcha Telegram group context, member count, monitored topics, today totals, retained totals, and today's leaderboard.
+`page.php` displays a browser dashboard for Satpam Lapak Gatcha and reads live stats from `runtime/lapak-member-limits.sqlite`. It shows the Gatcha Telegram group context, member count, monitored topics, today totals, retained totals, today's leaderboard, and message-rate averages. Message-rate stats are based on messages the bot receives from the group.
 
 ## Validation
 

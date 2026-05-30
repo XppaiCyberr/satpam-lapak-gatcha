@@ -35,9 +35,46 @@ function emptyTopicStats($topics)
     return $stats;
 }
 
+function defaultMessageStats()
+{
+    return [
+        'today' => 0,
+        'total' => 0,
+        'active_hours_today' => 0,
+        'avg_per_active_hour_today' => 0,
+        'avg_per_day' => 0,
+        'peak_hour_today' => 0,
+        'stored_days' => 0,
+    ];
+}
+
+function ensureDashboardSchema($db)
+{
+    $db->exec('CREATE TABLE IF NOT EXISTS message_thread_limits (
+        day TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT "",
+        count INTEGER NOT NULL DEFAULT 0,
+        warned INTEGER NOT NULL DEFAULT 0,
+        violation_count INTEGER NOT NULL DEFAULT 0,
+        last_warning INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, chat_id, thread_id, user_id)
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS group_message_stats (
+        day TEXT NOT NULL,
+        hour TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, hour, chat_id)
+    )');
+}
+
 function loadStats($dbPath, $chatId, $topics, $today)
 {
     $stats = emptyTopicStats($topics);
+    $messageStats = defaultMessageStats();
     $meta = [
         'available' => false,
         'error' => '',
@@ -47,17 +84,18 @@ function loadStats($dbPath, $chatId, $topics, $today)
 
     if (!is_file($dbPath)) {
         $meta['error'] = 'SQLite database has not been created yet.';
-        return [$stats, $meta];
+        return [$stats, $messageStats, $meta];
     }
 
     if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers())) {
         $meta['error'] = 'PDO SQLite is not available on this PHP runtime.';
-        return [$stats, $meta];
+        return [$stats, $messageStats, $meta];
     }
 
     try {
         $db = new PDO('sqlite:'.$dbPath);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        ensureDashboardSchema($db);
         $meta['available'] = true;
 
         $last = $db->query('SELECT MAX(day) FROM message_thread_limits')->fetchColumn();
@@ -91,15 +129,42 @@ function loadStats($dbPath, $chatId, $topics, $today)
                 ];
             }
         }
+
+        $stmt = $db->prepare('SELECT COALESCE(SUM(count), 0) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$today, $chatId]);
+        $messageStats['today'] = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COALESCE(SUM(count), 0) FROM group_message_stats WHERE chat_id = ?');
+        $stmt->execute([$chatId]);
+        $messageStats['total'] = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(*) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$today, $chatId]);
+        $messageStats['active_hours_today'] = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COALESCE(MAX(count), 0) FROM group_message_stats WHERE day = ? AND chat_id = ?');
+        $stmt->execute([$today, $chatId]);
+        $messageStats['peak_hour_today'] = (int) $stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(DISTINCT day) FROM group_message_stats WHERE chat_id = ?');
+        $stmt->execute([$chatId]);
+        $messageStats['stored_days'] = (int) $stmt->fetchColumn();
+
+        $messageStats['avg_per_active_hour_today'] = $messageStats['active_hours_today'] > 0
+            ? $messageStats['today'] / $messageStats['active_hours_today']
+            : 0;
+        $messageStats['avg_per_day'] = $messageStats['stored_days'] > 0
+            ? $messageStats['total'] / $messageStats['stored_days']
+            : 0;
     } catch (Exception $e) {
         $meta['available'] = false;
         $meta['error'] = $e->getMessage();
     }
 
-    return [$stats, $meta];
+    return [$stats, $messageStats, $meta];
 }
 
-list($stats, $meta) = loadStats($dbPath, $chatId, $topics, $today);
+list($stats, $messageStats, $meta) = loadStats($dbPath, $chatId, $topics, $today);
 $todayWarned = 0;
 $todayViolations = 0;
 $totalWarned = 0;
@@ -182,6 +247,14 @@ foreach ($stats as $topicStats) {
       place-items: center;
       font-weight: 900;
       font-size: 20px;
+      overflow: hidden;
+    }
+
+    .mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     .brand h1 {
@@ -670,7 +743,7 @@ foreach ($stats as $topicStats) {
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="mark">G</div>
+        <div class="mark"><img src="logo.jpg" alt="Gatcha logo"></div>
         <div>
           <h1>Satpam Lapak Gatcha</h1>
           <p>Telegram moderation bot</p>
@@ -747,6 +820,24 @@ foreach ($stats as $topicStats) {
           <p>Current Gatcha Telegram community size provided for this dashboard.</p>
         </div>
         <div class="card metric">
+          <span>Messages Today</span>
+          <strong><?= h(formatNumber($messageStats['today'])) ?></strong>
+          <p>Messages received by the bot today in the Gatcha group.</p>
+        </div>
+        <div class="card metric">
+          <span>Avg / Active Hour</span>
+          <strong><?= h(number_format($messageStats['avg_per_active_hour_today'], 1)) ?></strong>
+          <p>Average messages per hour with activity today.</p>
+        </div>
+        <div class="card metric">
+          <span>Avg / Stored Day</span>
+          <strong><?= h(number_format($messageStats['avg_per_day'], 1)) ?></strong>
+          <p>Average messages per retained day in SQLite.</p>
+        </div>
+      </section>
+
+      <section class="grid stats">
+        <div class="card metric">
           <span>Warned Today</span>
           <strong><?= h(formatNumber($todayWarned)) ?></strong>
           <p>Unique users who triggered warnings today across monitored topics.</p>
@@ -757,9 +848,14 @@ foreach ($stats as $topicStats) {
           <p>Excess messages deleted and counted today.</p>
         </div>
         <div class="card metric">
-          <span>Total Violations</span>
-          <strong><?= h(formatNumber($totalViolations)) ?></strong>
-          <p>All retained violations stored in SQLite.</p>
+          <span>Peak Hour Today</span>
+          <strong><?= h(formatNumber($messageStats['peak_hour_today'])) ?></strong>
+          <p>Highest message count in a recorded hour today.</p>
+        </div>
+        <div class="card metric">
+          <span>Total Messages</span>
+          <strong><?= h(formatNumber($messageStats['total'])) ?></strong>
+          <p>All messages retained in the SQLite message counter.</p>
         </div>
       </section>
 
@@ -847,7 +943,7 @@ foreach ($stats as $topicStats) {
       <section class="section" id="commands">
         <div class="sectionHeader">
           <h3>Bot Commands And Stats</h3>
-          <p>The bot currently exposes one command. Its inline keyboard switches between today-only data and retained totals from SQLite.</p>
+          <p>The bot currently exposes one command. Its inline keyboard switches between today-only moderation data and retained totals from SQLite. Message-volume averages reflect messages the bot receives from the group.</p>
         </div>
 
         <table class="table">
@@ -878,6 +974,11 @@ foreach ($stats as $topicStats) {
               <td>Ringkasan</td>
               <td>Returns the report message to the /satpam summary</td>
               <td>Today only</td>
+            </tr>
+            <tr>
+              <td>Message rate</td>
+              <td><?= h(formatNumber($messageStats['today'])) ?> today, <?= h(number_format($messageStats['avg_per_active_hour_today'], 1)) ?> per active hour, <?= h(number_format($messageStats['avg_per_day'], 1)) ?> per stored day</td>
+              <td><?= h($messageStats['stored_days']) ?> stored day<?= $messageStats['stored_days'] == 1 ? '' : 's' ?></td>
             </tr>
           </tbody>
         </table>

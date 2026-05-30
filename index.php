@@ -151,6 +151,8 @@ $lapakMemberThreadNames = [
 $lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.sqlite';
 $lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.';
 
+$bot->trackChatMessageStats($lapakMemberChatId, $lapakLimitStorage);
+
 $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
     return Bot::sendMessage(satpamCodeBlock(satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage)), [
         'parse_mode' => 'markdown',
