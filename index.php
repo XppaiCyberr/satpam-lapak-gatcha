@@ -66,16 +66,21 @@ $lapakMemberChatId = isset($credentials['lapak_member_chat_id']) && $credentials
     ? $credentials['lapak_member_chat_id']
     : '-1001197136417';
 $lapakMemberThreadIds = configuredThreadIds($credentials);
+$lapakMemberThreadNames = [
+    '3282669' => 'Lapak Digital',
+    '4226256' => 'Lapak Fisik',
+];
 $lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.json';
 $lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.';
 
-$bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage) {
+$bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
     $totals = $bot->messageThreadLimitWarningTotals($lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage);
     $text = "Satpam Lapak hari ini\n";
 
     foreach ($lapakMemberThreadIds as $threadId) {
         $count = isset($totals[$threadId]) ? $totals[$threadId] : 0;
-        $text .= 'Topik '.$threadId.': '.$count." user kena warning\n";
+        $name = isset($lapakMemberThreadNames[$threadId]) ? $lapakMemberThreadNames[$threadId] : 'Topik '.$threadId;
+        $text .= $name.': '.$count." user kena warning\n";
     }
 
     return Bot::sendMessage(trim($text), ['reply' => true]);
@@ -88,6 +93,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'warning_text' => $lapakWarningText,
         'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
+        'mention_user' => true,
     ]);
 }
 

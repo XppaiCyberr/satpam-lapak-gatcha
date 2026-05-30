@@ -151,6 +151,7 @@ class PHPTelebot
             'warning_text' => isset($options['warning_text']) ? $options['warning_text'] : 'Daily limit reached. You can send up to %d messages in this topic each day.',
             'ignored_commands' => isset($options['ignored_commands']) && is_array($options['ignored_commands']) ? $options['ignored_commands'] : [],
             'warning_cooldown' => isset($options['warning_cooldown']) ? (int) $options['warning_cooldown'] : 300,
+            'mention_user' => isset($options['mention_user']) ? (bool) $options['mention_user'] : false,
         ];
     }
 
@@ -523,6 +524,10 @@ class PHPTelebot
                 'reply_parameters' => ['message_id' => $message['message_id']],
                 'allow_sending_without_reply' => true,
             ];
+            if ($limit['mention_user']) {
+                $options['text'] = $this->messageThreadLimitUserMention($message['from']).' '.$options['text'];
+                $options['parse_mode'] = 'html';
+            }
             if (isset($message['message_thread_id'])) {
                 $options['message_thread_id'] = $message['message_thread_id'];
             }
@@ -543,6 +548,31 @@ class PHPTelebot
         $this->writeThreadLimitData($path, $data);
 
         return false;
+    }
+
+    /**
+     * @param array $user
+     *
+     * @return string
+     */
+    private function messageThreadLimitUserMention($user)
+    {
+        $name = isset($user['first_name']) ? $user['first_name'] : 'User';
+        if (isset($user['last_name']) && $user['last_name'] != '') {
+            $name .= ' '.$user['last_name'];
+        }
+
+        return '<a href="tg://user?id='.$user['id'].'">'.$this->escapeHtml($name).'</a>';
+    }
+
+    /**
+     * @param string $text
+     *
+     * @return string
+     */
+    private function escapeHtml($text)
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
     }
 
     /**

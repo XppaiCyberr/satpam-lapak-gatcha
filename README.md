@@ -11,7 +11,7 @@ This project is based on PHPTelebot, with a small moderation layer added for Lap
 - Counts messages per Telegram user per calendar day.
 - Allows the first 2 messages from each user in each monitored topic.
 - Deletes the 3rd and later messages from the same user in the same topic on the same day.
-- Sends the warning as a reply to the violating user's message.
+- Sends the warning as a reply to the violating user's message and mentions the user.
 - Throttles repeated warnings for the same user/topic to avoid warning spam during bursts.
 
 ```text
@@ -99,6 +99,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
         'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
+        'mention_user' => true,
     ]);
 }
 ```
@@ -109,7 +110,7 @@ For each new `message` update, the bot checks:
 - The message has `message_thread_id` `3282669` or `4226256`.
 - The sender has not exceeded 2 messages for that topic on the current day.
 
-If the user is still within the limit, the message is counted and normal bot handling continues. If the user is over the limit, the bot records that user as warned for the topic, deletes the message, and sends the warning text as a reply in the same topic.
+If the user is still within the limit, the message is counted and normal bot handling continues. If the user is over the limit, the bot records that user as warned for the topic, deletes the message, and sends the warning text as a reply in the same topic. The warning mentions the violating user.
 
 Repeated excess messages from the same user in the same topic are still deleted, but the warning text is only sent once per cooldown window. The default cooldown is 300 seconds.
 
@@ -119,14 +120,14 @@ The counter resets automatically when the calendar day changes.
 
 `index.php` only includes the Satpam command:
 
-- `/satpam` shows today's unique warned-user totals for topic `3282669` and topic `4226256`.
+- `/satpam` shows today's unique warned-user totals for Lapak Digital and Lapak Fisik.
 
 Example response:
 
 ```text
 Satpam Lapak hari ini
-Topik 3282669: 1 user kena warning
-Topik 4226256: 0 user kena warning
+Lapak Digital: 1 user kena warning
+Lapak Fisik: 0 user kena warning
 ```
 
 The `/satpam` command is ignored by the limiter, so checking status does not consume one of a user's allowed topic messages.
