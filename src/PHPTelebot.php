@@ -150,6 +150,7 @@ class PHPTelebot
             'delete_message' => isset($options['delete_message']) ? (bool) $options['delete_message'] : true,
             'warning_text' => isset($options['warning_text']) ? $options['warning_text'] : 'Daily limit reached. You can send up to %d messages in this topic each day.',
             'ignored_commands' => isset($options['ignored_commands']) && is_array($options['ignored_commands']) ? $options['ignored_commands'] : [],
+            'warning_cooldown' => isset($options['warning_cooldown']) ? (int) $options['warning_cooldown'] : 300,
         ];
     }
 
@@ -494,7 +495,39 @@ class PHPTelebot
                 $data[$day]['__warnings'][$topicKey] = [];
             }
             $data[$day]['__warnings'][$topicKey][(string) $message['from']['id']] = true;
+            $lastWarnedAt = isset($data[$day]['__last_warning'][$key]) ? (int) $data[$day]['__last_warning'][$key] : 0;
+            $sendWarning = $limit['warning_cooldown'] <= 0 || $lastWarnedAt < (time() - $limit['warning_cooldown']);
+            if ($sendWarning) {
+                if (!isset($data[$day]['__last_warning']) || !is_array($data[$day]['__last_warning'])) {
+                    $data[$day]['__last_warning'] = [];
+                }
+                $data[$day]['__last_warning'][$key] = time();
+            }
             $this->writeThreadLimitData($path, $data);
+
+            if (!$sendWarning) {
+                if ($limit['delete_message']) {
+                    Bot::deleteMessage([
+                        'chat_id' => $message['chat']['id'],
+                        'message_id' => $message['message_id'],
+                    ]);
+                }
+
+                return '-- Limited --';
+            }
+
+            $text = sprintf($limit['warning_text'], $limit['max_per_day']);
+            $options = [
+                'chat_id' => $message['chat']['id'],
+                'text' => $text,
+                'reply_parameters' => ['message_id' => $message['message_id']],
+                'allow_sending_without_reply' => true,
+            ];
+            if (isset($message['message_thread_id'])) {
+                $options['message_thread_id'] = $message['message_thread_id'];
+            }
+
+            $warning = Bot::sendMessage($options);
 
             if ($limit['delete_message']) {
                 Bot::deleteMessage([
@@ -503,13 +536,7 @@ class PHPTelebot
                 ]);
             }
 
-            $text = sprintf($limit['warning_text'], $limit['max_per_day']);
-            $options = ['chat_id' => $message['chat']['id'], 'text' => $text];
-            if (isset($message['message_thread_id'])) {
-                $options['message_thread_id'] = $message['message_thread_id'];
-            }
-
-            return Bot::sendMessage($options);
+            return $warning;
         }
 
         $data[$day][$key] = $count + 1;

@@ -87,6 +87,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'storage_path' => $lapakLimitStorage,
         'warning_text' => $lapakWarningText,
         'ignored_commands' => ['/satpam'],
+        'warning_cooldown' => 300,
     ]);
 }
 
