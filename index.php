@@ -2,10 +2,10 @@
 
 require_once __DIR__.'/src/PHPTelebot.php';
 
-function sampleCredentials($path)
+function loadCredentials($path)
 {
     if (!is_file($path)) {
-        die("Create x.c with token and username before running sample.php.\nExample:\ntoken=123456:ABCDEF\nusername=YourBot\n");
+        die("Create x.c with token and username before running index.php.\nExample:\ntoken=123456:ABCDEF\nusername=YourBot\n");
     }
 
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -26,10 +26,9 @@ function sampleCredentials($path)
     }
 
     if (isset($config['token'])) {
-        return [
-            'token' => $config['token'],
-            'username' => isset($config['username']) ? $config['username'] : '',
-        ];
+        $config['username'] = isset($config['username']) ? $config['username'] : '';
+
+        return $config;
     }
 
     return [
@@ -38,7 +37,7 @@ function sampleCredentials($path)
     ];
 }
 
-$credentials = sampleCredentials(__DIR__.'/x.c');
+$credentials = loadCredentials(__DIR__.'/x.c');
 $token = $credentials['token'];
 $username = ltrim($credentials['username'], '@');
 
@@ -55,6 +54,19 @@ $bot = new PHPTelebot($token, $username, [
         'chat_member',
         'managed_bot',
     ],
+]);
+
+$lapakMemberChatId = isset($credentials['lapak_member_chat_id']) && $credentials['lapak_member_chat_id'] !== ''
+    ? $credentials['lapak_member_chat_id']
+    : null;
+$lapakMemberThreadId = isset($credentials['lapak_member_thread_id']) && $credentials['lapak_member_thread_id'] !== ''
+    ? $credentials['lapak_member_thread_id']
+    : '-1001197136417';
+
+// Lapak Member topic: each user may send up to 2 messages per day.
+$bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
+    'storage_path' => __DIR__.'/runtime/lapak-member-limits.json',
+    'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
 ]);
 
 // Simple echo command

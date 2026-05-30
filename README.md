@@ -170,12 +170,23 @@ Then run
 php file.php
 ```
 
-You can also see my other [sample](https://github.com/radyakaze/phptelebot/blob/master/sample.php).
+You can also see the executable [sample](https://github.com/radyakaze/phptelebot/blob/master/index.php).
 
 *NOTE:*
 - If function parameters is more than one, PHPTelebot will split text by space.
 - If you don't set chat_id on options bot will send message to current chat.
 - If you add option **reply => true**, bot will reply to the current message with Telegram's `reply_parameters` format (only when you don't set custom `chat_id`, `reply_parameters`, or `reply_to_message_id`).
+
+#### Daily topic message limits
+
+Use `enforceMessageThreadLimit()` before `$bot->run()` to limit how many messages each user may send in a chat or forum topic per day.
+
+```php
+$bot->enforceMessageThreadLimit(null, -1001197136417, 2, [
+    'storage_path' => __DIR__.'/runtime/lapak-member-limits.json',
+    'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
+]);
+```
 
 ## Commands
 

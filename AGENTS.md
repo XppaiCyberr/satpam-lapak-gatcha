@@ -6,7 +6,7 @@ This is a small Composer package for a Telegram bot framework.
 
 - `src/PHPTelebot.php` contains the main `PHPTelebot` class, command/event registration, update handling, and bot runtime flow.
 - `src/Bot.php` contains static helpers for Telegram Bot API requests and message actions.
-- `sample.php` is an executable usage example for local/manual testing.
+- `index.php` is an executable usage example for local/manual testing.
 - `README.md` is the primary user documentation.
 - `composer.json` defines package metadata, PHP requirements, and file autoloading.
 
@@ -17,7 +17,7 @@ There is currently no committed `tests/` directory or asset pipeline.
 - `composer install` installs package dependencies and creates `vendor/autoload.php`.
 - `composer validate` checks `composer.json` for structural issues.
 - `php -l src/PHPTelebot.php` and `php -l src/Bot.php` run PHP syntax checks.
-- `php sample.php` runs the example bot script after replacing placeholder token values with a valid Telegram bot token.
+- `php index.php` runs the example bot script after replacing placeholder token values with a valid Telegram bot token.
 
 Avoid committing local token-bearing scripts; `.gitignore` already excludes `test.php`.
 
@@ -27,7 +27,7 @@ Keep the code compatible with PHP 5.4 as declared in `composer.json`; avoid mode
 
 ## Testing Guidelines
 
-No automated test framework is currently configured. For now, validate changes with `composer validate`, PHP lint checks, and focused manual testing through `sample.php` or a temporary ignored script. If adding tests, prefer a `tests/` directory and document the runner command in `README.md` and this file.
+No automated test framework is currently configured. For now, validate changes with `composer validate`, PHP lint checks, and focused manual testing through `index.php` or a temporary ignored script. If adding tests, prefer a `tests/` directory and document the runner command in `README.md` and this file.
 
 ## Commit & Pull Request Guidelines
 

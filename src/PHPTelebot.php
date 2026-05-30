@@ -32,6 +32,10 @@ class PHPTelebot
      */
     protected $_options = [];
     /**
+     * @var array
+     */
+    protected $_messageThreadLimits = [];
+    /**
      * Bot token.
      *
      * @var string
@@ -126,6 +130,26 @@ class PHPTelebot
     public function regex($regex, $answer)
     {
         $this->_command['customRegex:'.$regex] = $answer;
+    }
+
+    /**
+     * Enforce a daily per-user message limit in a chat or forum topic.
+     *
+     * @param int|string|null $chatId
+     * @param int|null   $messageThreadId
+     * @param int        $maxPerDay
+     * @param array      $options
+     */
+    public function enforceMessageThreadLimit($chatId, $messageThreadId = null, $maxPerDay = 2, $options = [])
+    {
+        $this->_messageThreadLimits[] = [
+            'chat_id' => $chatId === null ? null : (string) $chatId,
+            'message_thread_id' => $messageThreadId === null ? null : (string) $messageThreadId,
+            'max_per_day' => (int) $maxPerDay,
+            'storage_path' => isset($options['storage_path']) ? $options['storage_path'] : sys_get_temp_dir().'/phptelebot-thread-limits.json',
+            'delete_message' => isset($options['delete_message']) ? (bool) $options['delete_message'] : true,
+            'warning_text' => isset($options['warning_text']) ? $options['warning_text'] : 'Daily limit reached. You can send up to %d messages in this topic each day.',
+        ];
     }
 
     /**
@@ -227,6 +251,11 @@ class PHPTelebot
 
         if (isset($message['date']) && $message['date'] < (time() - 120)) {
             return '-- Pass --';
+        }
+
+        $limitResponse = $this->enforceMessageThreadLimits($message);
+        if ($limitResponse !== false) {
+            return $limitResponse;
         }
 
         if (Bot::type() == 'text' && isset($message['text'])) {
@@ -340,6 +369,135 @@ class PHPTelebot
         }
 
         return [];
+    }
+
+    /**
+     * Apply registered message thread limits.
+     *
+     * @param array $message
+     *
+     * @return string|bool
+     */
+    private function enforceMessageThreadLimits($message)
+    {
+        if (empty($this->_messageThreadLimits) || Bot::updateType() != 'message') {
+            return false;
+        }
+
+        foreach ($this->_messageThreadLimits as $limit) {
+            if (!$this->messageMatchesThreadLimit($message, $limit)) {
+                continue;
+            }
+
+            return $this->applyMessageThreadLimit($message, $limit);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array $message
+     * @param array $limit
+     *
+     * @return bool
+     */
+    private function messageMatchesThreadLimit($message, $limit)
+    {
+        if (!isset($message['chat']['id'])) {
+            return false;
+        }
+
+        if ($limit['chat_id'] !== null && (string) $message['chat']['id'] != $limit['chat_id']) {
+            return false;
+        }
+
+        if ($limit['message_thread_id'] === null) {
+            return true;
+        }
+
+        return isset($message['message_thread_id']) && (string) $message['message_thread_id'] == $limit['message_thread_id'];
+    }
+
+    /**
+     * @param array $message
+     * @param array $limit
+     *
+     * @return string
+     */
+    private function applyMessageThreadLimit($message, $limit)
+    {
+        if (!isset($message['from']['id']) || !isset($message['message_id'])) {
+            return false;
+        }
+
+        $path = $limit['storage_path'];
+        $data = $this->readThreadLimitData($path);
+        $day = date('Y-m-d', isset($message['date']) ? $message['date'] : time());
+        $threadId = isset($message['message_thread_id']) ? (string) $message['message_thread_id'] : 'main';
+        $key = $message['chat']['id'].':'.$threadId.':'.$message['from']['id'];
+
+        if (!isset($data[$day])) {
+            $data = [$day => []];
+        } else {
+            foreach (array_keys($data) as $storedDay) {
+                if ($storedDay != $day) {
+                    unset($data[$storedDay]);
+                }
+            }
+        }
+
+        $count = isset($data[$day][$key]) ? (int) $data[$day][$key] : 0;
+        if ($count >= $limit['max_per_day']) {
+            if ($limit['delete_message']) {
+                Bot::deleteMessage([
+                    'chat_id' => $message['chat']['id'],
+                    'message_id' => $message['message_id'],
+                ]);
+            }
+
+            $text = sprintf($limit['warning_text'], $limit['max_per_day']);
+            $options = ['chat_id' => $message['chat']['id'], 'text' => $text];
+            if (isset($message['message_thread_id'])) {
+                $options['message_thread_id'] = $message['message_thread_id'];
+            }
+
+            return Bot::sendMessage($options);
+        }
+
+        $data[$day][$key] = $count + 1;
+        $this->writeThreadLimitData($path, $data);
+
+        return false;
+    }
+
+    /**
+     * @param string $path
+     *
+     * @return array
+     */
+    private function readThreadLimitData($path)
+    {
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param string $path
+     * @param array  $data
+     */
+    private function writeThreadLimitData($path, $data)
+    {
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+
+        file_put_contents($path, json_encode($data), LOCK_EX);
     }
 
     /**
