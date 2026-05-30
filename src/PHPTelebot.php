@@ -149,7 +149,41 @@ class PHPTelebot
             'storage_path' => isset($options['storage_path']) ? $options['storage_path'] : sys_get_temp_dir().'/phptelebot-thread-limits.json',
             'delete_message' => isset($options['delete_message']) ? (bool) $options['delete_message'] : true,
             'warning_text' => isset($options['warning_text']) ? $options['warning_text'] : 'Daily limit reached. You can send up to %d messages in this topic each day.',
+            'ignored_commands' => isset($options['ignored_commands']) && is_array($options['ignored_commands']) ? $options['ignored_commands'] : [],
         ];
+    }
+
+    /**
+     * Get unique warned-user totals for message thread limits.
+     *
+     * @param int|string $chatId
+     * @param array      $messageThreadIds
+     * @param string     $storagePath
+     * @param string     $day
+     *
+     * @return array
+     */
+    public function messageThreadLimitWarningTotals($chatId, $messageThreadIds, $storagePath = '', $day = '')
+    {
+        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.json';
+        $day = $day != '' ? $day : date('Y-m-d');
+        $data = $this->readThreadLimitData($path);
+        $totals = [];
+
+        foreach ($messageThreadIds as $messageThreadId) {
+            $messageThreadId = trim($messageThreadId);
+            if ($messageThreadId == '') {
+                continue;
+            }
+
+            $topicKey = $chatId.':'.$messageThreadId;
+            $totals[$messageThreadId] = 0;
+            if (isset($data[$day]['__warnings'][$topicKey]) && is_array($data[$day]['__warnings'][$topicKey])) {
+                $totals[$messageThreadId] = count($data[$day]['__warnings'][$topicKey]);
+            }
+        }
+
+        return $totals;
     }
 
     /**
@@ -430,11 +464,16 @@ class PHPTelebot
             return false;
         }
 
+        if ($this->isIgnoredMessageThreadLimitCommand($message, $limit)) {
+            return false;
+        }
+
         $path = $limit['storage_path'];
         $data = $this->readThreadLimitData($path);
         $day = date('Y-m-d', isset($message['date']) ? $message['date'] : time());
         $threadId = isset($message['message_thread_id']) ? (string) $message['message_thread_id'] : 'main';
         $key = $message['chat']['id'].':'.$threadId.':'.$message['from']['id'];
+        $topicKey = $message['chat']['id'].':'.$threadId;
 
         if (!isset($data[$day])) {
             $data = [$day => []];
@@ -448,6 +487,15 @@ class PHPTelebot
 
         $count = isset($data[$day][$key]) ? (int) $data[$day][$key] : 0;
         if ($count >= $limit['max_per_day']) {
+            if (!isset($data[$day]['__warnings']) || !is_array($data[$day]['__warnings'])) {
+                $data[$day]['__warnings'] = [];
+            }
+            if (!isset($data[$day]['__warnings'][$topicKey]) || !is_array($data[$day]['__warnings'][$topicKey])) {
+                $data[$day]['__warnings'][$topicKey] = [];
+            }
+            $data[$day]['__warnings'][$topicKey][(string) $message['from']['id']] = true;
+            $this->writeThreadLimitData($path, $data);
+
             if ($limit['delete_message']) {
                 Bot::deleteMessage([
                     'chat_id' => $message['chat']['id'],
@@ -466,6 +514,32 @@ class PHPTelebot
 
         $data[$day][$key] = $count + 1;
         $this->writeThreadLimitData($path, $data);
+
+        return false;
+    }
+
+    /**
+     * @param array $message
+     * @param array $limit
+     *
+     * @return bool
+     */
+    private function isIgnoredMessageThreadLimitCommand($message, $limit)
+    {
+        if (empty($limit['ignored_commands']) || !isset($message['text'])) {
+            return false;
+        }
+
+        foreach ($limit['ignored_commands'] as $command) {
+            $command = trim($command);
+            if ($command == '') {
+                continue;
+            }
+
+            if ($message['text'] == $command || strpos($message['text'], $command.' ') === 0 || strpos($message['text'], $command.'@') === 0) {
+                return true;
+            }
+        }
 
         return false;
     }
