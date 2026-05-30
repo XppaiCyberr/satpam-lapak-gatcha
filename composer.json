@@ -9,7 +9,9 @@
     ],
     "require": {
         "php": ">=5.4",
-        "ext-curl": "*"
+        "ext-curl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*"
     },
     "autoload": {
         "files": ["src/PHPTelebot.php"]

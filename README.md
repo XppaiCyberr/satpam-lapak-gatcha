@@ -19,7 +19,7 @@ This project is based on PHPTelebot, with a small moderation layer added for Lap
 Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 ```
 
-- Stores daily counters locally in `runtime/lapak-member-limits.json`.
+- Stores daily counters locally in SQLite at `runtime/lapak-member-limits.sqlite`.
 - Tracks the number of unique users who received warnings in each monitored topic.
 - Provides `/satpam` to report today's warning totals per topic.
 - Adds inline buttons to `/satpam` for switching between today's summary, today's violation leaderboard, and retained total data.
@@ -31,7 +31,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Added `PHPTelebot::enforceMessageThreadLimit()` in `src/PHPTelebot.php`.
 - Added `PHPTelebot::messageThreadLimitWarningTotals()` for report commands.
 - Wired the Lapak Member topic rules in `index.php`.
-- Added local JSON storage for per-day topic message counts.
+- Added local SQLite storage for per-day topic message counts.
 - Removed the old sample commands from `index.php`.
 - Added `/satpam` to show warning totals, an inline leaderboard view, and a total view.
 - Updated the default moderation target:
@@ -43,6 +43,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 
 - PHP 5.4 or newer
 - PHP cURL extension
+- PHP PDO extension with the SQLite driver
 - Telegram bot token from [@BotFather](https://telegram.me/BotFather)
 - Bot must be added to the target group
 - Bot needs permission to delete messages in the group/topic
@@ -97,7 +98,7 @@ The rule is registered before `$bot->run()`:
 ```php
 foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
     $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
-        'storage_path' => __DIR__.'/runtime/lapak-member-limits.json',
+        'storage_path' => __DIR__.'/runtime/lapak-member-limits.sqlite',
         'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
         'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
@@ -118,7 +119,7 @@ If the user is still within the limit, the message is counted and normal bot han
 
 Repeated excess messages from the same user in the same topic are still deleted, but the warning text is only sent once per cooldown window. The default cooldown is 300 seconds.
 
-The counter resets automatically when the calendar day changes. Older day buckets are retained in `runtime/lapak-member-limits.json` so the inline `Total` view can aggregate them.
+The counter resets automatically when the calendar day changes. Older day rows are retained in `runtime/lapak-member-limits.sqlite` so the inline `Total` view can aggregate them.
 
 ## Useful Commands
 

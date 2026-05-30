@@ -148,7 +148,7 @@ $lapakMemberThreadNames = [
     '3282669' => 'Lapak Digital',
     '4226256' => 'Lapak Fisik',
 ];
-$lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.json';
+$lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.sqlite';
 $lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.';
 
 $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {

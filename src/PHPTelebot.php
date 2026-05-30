@@ -146,7 +146,7 @@ class PHPTelebot
             'chat_id' => $chatId === null ? null : (string) $chatId,
             'message_thread_id' => $messageThreadId === null ? null : (string) $messageThreadId,
             'max_per_day' => (int) $maxPerDay,
-            'storage_path' => isset($options['storage_path']) ? $options['storage_path'] : sys_get_temp_dir().'/phptelebot-thread-limits.json',
+            'storage_path' => isset($options['storage_path']) ? $options['storage_path'] : sys_get_temp_dir().'/phptelebot-thread-limits.sqlite',
             'delete_message' => isset($options['delete_message']) ? (bool) $options['delete_message'] : true,
             'warning_text' => isset($options['warning_text']) ? $options['warning_text'] : 'Daily limit reached. You can send up to %d messages in this topic each day.',
             'ignored_commands' => isset($options['ignored_commands']) && is_array($options['ignored_commands']) ? $options['ignored_commands'] : [],
@@ -168,9 +168,9 @@ class PHPTelebot
      */
     public function messageThreadLimitWarningTotals($chatId, $messageThreadIds, $storagePath = '', $day = '')
     {
-        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.json';
+        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.sqlite';
         $day = $day != '' ? $day : date('Y-m-d');
-        $data = $this->readThreadLimitData($path);
+        $db = $this->threadLimitDatabase($path);
         $totals = [];
 
         foreach ($messageThreadIds as $messageThreadId) {
@@ -179,21 +179,14 @@ class PHPTelebot
                 continue;
             }
 
-            $topicKey = $chatId.':'.$messageThreadId;
-            $totals[$messageThreadId] = 0;
             if ($day == '*') {
-                $warnedUsers = [];
-                foreach ($data as $dayData) {
-                    if (isset($dayData['__warnings'][$topicKey]) && is_array($dayData['__warnings'][$topicKey])) {
-                        foreach ($dayData['__warnings'][$topicKey] as $userId => $warned) {
-                            $warnedUsers[$userId] = true;
-                        }
-                    }
-                }
-                $totals[$messageThreadId] = count($warnedUsers);
-            } elseif (isset($data[$day]['__warnings'][$topicKey]) && is_array($data[$day]['__warnings'][$topicKey])) {
-                $totals[$messageThreadId] = count($data[$day]['__warnings'][$topicKey]);
+                $stmt = $db->prepare('SELECT COUNT(DISTINCT user_id) FROM message_thread_limits WHERE chat_id = ? AND thread_id = ? AND warned = 1');
+                $stmt->execute([(string) $chatId, (string) $messageThreadId]);
+            } else {
+                $stmt = $db->prepare('SELECT COUNT(DISTINCT user_id) FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ? AND warned = 1');
+                $stmt->execute([$day, (string) $chatId, (string) $messageThreadId]);
             }
+            $totals[$messageThreadId] = (int) $stmt->fetchColumn();
         }
 
         return $totals;
@@ -211,9 +204,9 @@ class PHPTelebot
      */
     public function messageThreadLimitViolations($chatId, $messageThreadIds, $storagePath = '', $day = '')
     {
-        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.json';
+        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.sqlite';
         $day = $day != '' ? $day : date('Y-m-d');
-        $data = $this->readThreadLimitData($path);
+        $db = $this->threadLimitDatabase($path);
         $violations = [];
 
         foreach ($messageThreadIds as $messageThreadId) {
@@ -222,52 +215,25 @@ class PHPTelebot
                 continue;
             }
 
-            $topicKey = $chatId.':'.$messageThreadId;
-            $violations[$messageThreadId] = [];
-            $items = [];
             if ($day == '*') {
-                foreach ($data as $dayData) {
-                    if (isset($dayData['__violations'][$topicKey]) && is_array($dayData['__violations'][$topicKey])) {
-                        $this->mergeMessageThreadLimitViolations($items, $dayData['__violations'][$topicKey]);
-                    }
-                }
-            } elseif (isset($data[$day]['__violations'][$topicKey]) && is_array($data[$day]['__violations'][$topicKey])) {
-                $this->mergeMessageThreadLimitViolations($items, $data[$day]['__violations'][$topicKey]);
+                $stmt = $db->prepare('SELECT user_id, MAX(name) AS name, SUM(violation_count) AS count FROM message_thread_limits WHERE chat_id = ? AND thread_id = ? AND violation_count > 0 GROUP BY user_id ORDER BY count DESC, name ASC');
+                $stmt->execute([(string) $chatId, (string) $messageThreadId]);
+            } else {
+                $stmt = $db->prepare('SELECT user_id, name, violation_count AS count FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ? AND violation_count > 0 ORDER BY violation_count DESC, name ASC');
+                $stmt->execute([$day, (string) $chatId, (string) $messageThreadId]);
             }
 
-            $violations[$messageThreadId] = array_values($items);
-            usort($violations[$messageThreadId], function ($a, $b) {
-                if ($a['count'] == $b['count']) {
-                    return strcmp($a['name'], $b['name']);
-                }
-
-                return $a['count'] < $b['count'] ? 1 : -1;
-            });
+            $violations[$messageThreadId] = [];
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $violations[$messageThreadId][] = [
+                    'user_id' => $row['user_id'],
+                    'name' => $row['name'] != '' ? $row['name'] : 'User '.$row['user_id'],
+                    'count' => (int) $row['count'],
+                ];
+            }
         }
 
         return $violations;
-    }
-
-    /**
-     * @param array $items
-     * @param array $storedViolations
-     */
-    private function mergeMessageThreadLimitViolations(&$items, $storedViolations)
-    {
-        foreach ($storedViolations as $userId => $violation) {
-            if (!isset($items[$userId])) {
-                $items[$userId] = [
-                    'user_id' => $userId,
-                    'name' => isset($violation['name']) ? $violation['name'] : 'User '.$userId,
-                    'count' => 0,
-                ];
-            }
-
-            if (isset($violation['name']) && $violation['name'] != '') {
-                $items[$userId]['name'] = $violation['name'];
-            }
-            $items[$userId]['count'] += isset($violation['count']) ? (int) $violation['count'] : 0;
-        }
     }
 
     /**
@@ -557,49 +523,28 @@ class PHPTelebot
         }
 
         $path = $limit['storage_path'];
-        $data = $this->readThreadLimitData($path);
+        $db = $this->threadLimitDatabase($path);
         $day = date('Y-m-d', isset($message['date']) ? $message['date'] : time());
         $threadId = isset($message['message_thread_id']) ? (string) $message['message_thread_id'] : 'main';
-        $key = $message['chat']['id'].':'.$threadId.':'.$message['from']['id'];
-        $topicKey = $message['chat']['id'].':'.$threadId;
+        $chatId = (string) $message['chat']['id'];
+        $userId = (string) $message['from']['id'];
+        $userName = $this->messageThreadLimitUserName($message['from']);
 
-        if (!isset($data[$day])) {
-            $data[$day] = [];
+        $stmt = $db->prepare('SELECT count, last_warning FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ? AND user_id = ?');
+        $stmt->execute([$day, $chatId, $threadId, $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $stmt = $db->prepare('INSERT INTO message_thread_limits (day, chat_id, thread_id, user_id, name) VALUES (?, ?, ?, ?, ?)');
+            $stmt->execute([$day, $chatId, $threadId, $userId, $userName]);
+            $row = ['count' => 0, 'last_warning' => 0];
         }
 
-        $count = isset($data[$day][$key]) ? (int) $data[$day][$key] : 0;
+        $count = (int) $row['count'];
         if ($count >= $limit['max_per_day']) {
-            if (!isset($data[$day]['__warnings']) || !is_array($data[$day]['__warnings'])) {
-                $data[$day]['__warnings'] = [];
-            }
-            if (!isset($data[$day]['__warnings'][$topicKey]) || !is_array($data[$day]['__warnings'][$topicKey])) {
-                $data[$day]['__warnings'][$topicKey] = [];
-            }
-            $data[$day]['__warnings'][$topicKey][(string) $message['from']['id']] = true;
-            if (!isset($data[$day]['__violations']) || !is_array($data[$day]['__violations'])) {
-                $data[$day]['__violations'] = [];
-            }
-            if (!isset($data[$day]['__violations'][$topicKey]) || !is_array($data[$day]['__violations'][$topicKey])) {
-                $data[$day]['__violations'][$topicKey] = [];
-            }
-            $userId = (string) $message['from']['id'];
-            if (!isset($data[$day]['__violations'][$topicKey][$userId]) || !is_array($data[$day]['__violations'][$topicKey][$userId])) {
-                $data[$day]['__violations'][$topicKey][$userId] = [
-                    'name' => $this->messageThreadLimitUserName($message['from']),
-                    'count' => 0,
-                ];
-            }
-            $data[$day]['__violations'][$topicKey][$userId]['name'] = $this->messageThreadLimitUserName($message['from']);
-            $data[$day]['__violations'][$topicKey][$userId]['count'] = (int) $data[$day]['__violations'][$topicKey][$userId]['count'] + 1;
-            $lastWarnedAt = isset($data[$day]['__last_warning'][$key]) ? (int) $data[$day]['__last_warning'][$key] : 0;
+            $lastWarnedAt = (int) $row['last_warning'];
             $sendWarning = $limit['warning_cooldown'] <= 0 || $lastWarnedAt < (time() - $limit['warning_cooldown']);
-            if ($sendWarning) {
-                if (!isset($data[$day]['__last_warning']) || !is_array($data[$day]['__last_warning'])) {
-                    $data[$day]['__last_warning'] = [];
-                }
-                $data[$day]['__last_warning'][$key] = time();
-            }
-            $this->writeThreadLimitData($path, $data);
+            $stmt = $db->prepare('UPDATE message_thread_limits SET name = ?, warned = 1, violation_count = violation_count + 1, last_warning = ? WHERE day = ? AND chat_id = ? AND thread_id = ? AND user_id = ?');
+            $stmt->execute([$userName, $sendWarning ? time() : $lastWarnedAt, $day, $chatId, $threadId, $userId]);
 
             if (!$sendWarning) {
                 if ($limit['delete_message']) {
@@ -639,8 +584,8 @@ class PHPTelebot
             return $warning;
         }
 
-        $data[$day][$key] = $count + 1;
-        $this->writeThreadLimitData($path, $data);
+        $stmt = $db->prepare('UPDATE message_thread_limits SET name = ?, count = count + 1 WHERE day = ? AND chat_id = ? AND thread_id = ? AND user_id = ?');
+        $stmt->execute([$userName, $day, $chatId, $threadId, $userId]);
 
         return false;
     }
@@ -724,31 +669,176 @@ class PHPTelebot
     /**
      * @param string $path
      *
-     * @return array
+     * @return PDO
      */
-    private function readThreadLimitData($path)
+    private function threadLimitDatabase($path)
     {
-        if (!is_file($path)) {
-            return [];
+        if (!class_exists('PDO')) {
+            throw new Exception('PDO is required for SQLite message limit storage.');
+        }
+        if (!in_array('sqlite', PDO::getAvailableDrivers())) {
+            throw new Exception('PDO SQLite driver is required for message limit storage.');
         }
 
-        $data = json_decode(file_get_contents($path), true);
-
-        return is_array($data) ? $data : [];
-    }
-
-    /**
-     * @param string $path
-     * @param array  $data
-     */
-    private function writeThreadLimitData($path, $data)
-    {
         $dir = dirname($path);
         if (!is_dir($dir)) {
             mkdir($dir, 0775, true);
         }
 
-        file_put_contents($path, json_encode($data), LOCK_EX);
+        $db = new PDO('sqlite:'.$path);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $db->exec('CREATE TABLE IF NOT EXISTS message_thread_limits (
+            day TEXT NOT NULL,
+            chat_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT "",
+            count INTEGER NOT NULL DEFAULT 0,
+            warned INTEGER NOT NULL DEFAULT 0,
+            violation_count INTEGER NOT NULL DEFAULT 0,
+            last_warning INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (day, chat_id, thread_id, user_id)
+        )');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_message_thread_limits_topic ON message_thread_limits (chat_id, thread_id)');
+        $this->migrateThreadLimitJsonStorage($db, $path);
+
+        return $db;
+    }
+
+    /**
+     * @param PDO    $db
+     * @param string $path
+     */
+    private function migrateThreadLimitJsonStorage($db, $path)
+    {
+        $count = (int) $db->query('SELECT COUNT(*) FROM message_thread_limits')->fetchColumn();
+        if ($count > 0) {
+            return;
+        }
+
+        $jsonPath = preg_replace('/\.sqlite$/', '.json', $path);
+        if ($jsonPath == $path || !is_file($jsonPath)) {
+            return;
+        }
+
+        $data = json_decode(file_get_contents($jsonPath), true);
+        if (!is_array($data)) {
+            return;
+        }
+
+        $rows = [];
+        foreach ($data as $day => $dayData) {
+            if (!is_array($dayData)) {
+                continue;
+            }
+
+            foreach ($dayData as $key => $value) {
+                if (substr($key, 0, 2) == '__') {
+                    continue;
+                }
+                $parts = explode(':', $key, 3);
+                if (count($parts) != 3) {
+                    continue;
+                }
+                $rowKey = $day.':'.$key;
+                $rows[$rowKey] = [
+                    'day' => $day,
+                    'chat_id' => $parts[0],
+                    'thread_id' => $parts[1],
+                    'user_id' => $parts[2],
+                    'name' => '',
+                    'count' => (int) $value,
+                    'warned' => 0,
+                    'violation_count' => 0,
+                    'last_warning' => 0,
+                ];
+            }
+
+            if (isset($dayData['__warnings']) && is_array($dayData['__warnings'])) {
+                foreach ($dayData['__warnings'] as $topicKey => $users) {
+                    $topic = explode(':', $topicKey, 2);
+                    if (count($topic) != 2 || !is_array($users)) {
+                        continue;
+                    }
+                    foreach ($users as $userId => $warned) {
+                        $rowKey = $day.':'.$topicKey.':'.$userId;
+                        $this->ensureMigratedThreadLimitRow($rows, $rowKey, $day, $topic[0], $topic[1], $userId);
+                        $rows[$rowKey]['warned'] = 1;
+                    }
+                }
+            }
+
+            if (isset($dayData['__last_warning']) && is_array($dayData['__last_warning'])) {
+                foreach ($dayData['__last_warning'] as $key => $lastWarning) {
+                    $parts = explode(':', $key, 3);
+                    if (count($parts) != 3) {
+                        continue;
+                    }
+                    $rowKey = $day.':'.$key;
+                    $this->ensureMigratedThreadLimitRow($rows, $rowKey, $day, $parts[0], $parts[1], $parts[2]);
+                    $rows[$rowKey]['last_warning'] = (int) $lastWarning;
+                }
+            }
+
+            if (isset($dayData['__violations']) && is_array($dayData['__violations'])) {
+                foreach ($dayData['__violations'] as $topicKey => $users) {
+                    $topic = explode(':', $topicKey, 2);
+                    if (count($topic) != 2 || !is_array($users)) {
+                        continue;
+                    }
+                    foreach ($users as $userId => $violation) {
+                        $rowKey = $day.':'.$topicKey.':'.$userId;
+                        $this->ensureMigratedThreadLimitRow($rows, $rowKey, $day, $topic[0], $topic[1], $userId);
+                        if (is_array($violation)) {
+                            $rows[$rowKey]['name'] = isset($violation['name']) ? $violation['name'] : '';
+                            $rows[$rowKey]['violation_count'] = isset($violation['count']) ? (int) $violation['count'] : 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        $stmt = $db->prepare('INSERT OR REPLACE INTO message_thread_limits (day, chat_id, thread_id, user_id, name, count, warned, violation_count, last_warning) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($rows as $row) {
+            $stmt->execute([
+                $row['day'],
+                $row['chat_id'],
+                $row['thread_id'],
+                $row['user_id'],
+                $row['name'],
+                $row['count'],
+                $row['warned'],
+                $row['violation_count'],
+                $row['last_warning'],
+            ]);
+        }
+    }
+
+    /**
+     * @param array  $rows
+     * @param string $rowKey
+     * @param string $day
+     * @param string $chatId
+     * @param string $threadId
+     * @param string $userId
+     */
+    private function ensureMigratedThreadLimitRow(&$rows, $rowKey, $day, $chatId, $threadId, $userId)
+    {
+        if (isset($rows[$rowKey])) {
+            return;
+        }
+
+        $rows[$rowKey] = [
+            'day' => $day,
+            'chat_id' => $chatId,
+            'thread_id' => $threadId,
+            'user_id' => $userId,
+            'name' => '',
+            'count' => 0,
+            'warned' => 0,
+            'violation_count' => 0,
+            'last_warning' => 0,
+        ];
     }
 
     /**
