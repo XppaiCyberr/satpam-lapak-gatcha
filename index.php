@@ -86,12 +86,35 @@ $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThre
     return Bot::sendMessage(trim($text), ['reply' => true]);
 });
 
+$bot->cmd('/satpamlb', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
+    $violations = $bot->messageThreadLimitViolations($lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage);
+    $text = "Leaderboard pelanggar hari ini\n";
+
+    foreach ($lapakMemberThreadIds as $threadId) {
+        $name = isset($lapakMemberThreadNames[$threadId]) ? $lapakMemberThreadNames[$threadId] : 'Topik '.$threadId;
+        $text .= "\n".$name."\n";
+
+        if (empty($violations[$threadId])) {
+            $text .= "Belum ada pelanggar\n";
+            continue;
+        }
+
+        $rank = 1;
+        foreach ($violations[$threadId] as $violation) {
+            $text .= $rank.'. '.$violation['name'].' - '.$violation['count']." pelanggaran\n";
+            $rank++;
+        }
+    }
+
+    return Bot::sendMessage(trim($text), ['reply' => true]);
+});
+
 // Lapak Member topics: each user may send up to 2 messages per topic per day.
 foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
     $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
         'storage_path' => $lapakLimitStorage,
         'warning_text' => $lapakWarningText,
-        'ignored_commands' => ['/satpam'],
+        'ignored_commands' => ['/satpam', '/satpamlb'],
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,

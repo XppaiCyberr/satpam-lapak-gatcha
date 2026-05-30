@@ -22,6 +22,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Stores daily counters locally in `runtime/lapak-member-limits.json`.
 - Tracks the number of unique users who received warnings in each monitored topic.
 - Provides `/satpam` to report today's warning totals per topic.
+- Provides `/satpamlb` to list users who violated the rule and their violation counts.
 - Ignores the runtime counter file through `.gitignore`.
 
 ## What Changed
@@ -33,6 +34,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Added local JSON storage for per-day topic message counts.
 - Removed the old sample commands from `index.php`.
 - Added `/satpam` to show warning totals per monitored topic.
+- Added `/satpamlb` to show today's violation leaderboard per monitored topic.
 - Updated the default moderation target:
   - Chat ID: `-1001197136417`
   - Message thread/topic IDs: `3282669`, `4226256`
@@ -98,7 +100,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
     $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
         'storage_path' => __DIR__.'/runtime/lapak-member-limits.json',
         'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
-        'ignored_commands' => ['/satpam'],
+        'ignored_commands' => ['/satpam', '/satpamlb'],
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,
@@ -124,6 +126,7 @@ The counter resets automatically when the calendar day changes.
 `index.php` only includes the Satpam command:
 
 - `/satpam` shows today's unique warned-user totals for Lapak Digital and Lapak Fisik.
+- `/satpamlb` shows who violated the rule today and how many excess messages they sent.
 
 Example response:
 
@@ -134,6 +137,21 @@ Lapak Fisik: 0 user kena warning
 ```
 
 The `/satpam` command is ignored by the limiter, so checking status does not consume one of a user's allowed topic messages.
+
+Example `/satpamlb` response:
+
+```text
+Leaderboard pelanggar hari ini
+
+Lapak Digital
+1. User A - 3 pelanggaran
+2. User B - 1 pelanggaran
+
+Lapak Fisik
+Belum ada pelanggar
+```
+
+The `/satpamlb` command is also ignored by the limiter.
 
 ## Validation
 

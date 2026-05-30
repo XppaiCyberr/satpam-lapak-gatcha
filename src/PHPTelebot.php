@@ -190,6 +190,53 @@ class PHPTelebot
     }
 
     /**
+     * Get violation details for message thread limits.
+     *
+     * @param int|string $chatId
+     * @param array      $messageThreadIds
+     * @param string     $storagePath
+     * @param string     $day
+     *
+     * @return array
+     */
+    public function messageThreadLimitViolations($chatId, $messageThreadIds, $storagePath = '', $day = '')
+    {
+        $path = $storagePath != '' ? $storagePath : sys_get_temp_dir().'/phptelebot-thread-limits.json';
+        $day = $day != '' ? $day : date('Y-m-d');
+        $data = $this->readThreadLimitData($path);
+        $violations = [];
+
+        foreach ($messageThreadIds as $messageThreadId) {
+            $messageThreadId = trim($messageThreadId);
+            if ($messageThreadId == '') {
+                continue;
+            }
+
+            $topicKey = $chatId.':'.$messageThreadId;
+            $violations[$messageThreadId] = [];
+            if (isset($data[$day]['__violations'][$topicKey]) && is_array($data[$day]['__violations'][$topicKey])) {
+                foreach ($data[$day]['__violations'][$topicKey] as $userId => $violation) {
+                    $violations[$messageThreadId][] = [
+                        'user_id' => $userId,
+                        'name' => isset($violation['name']) ? $violation['name'] : 'User '.$userId,
+                        'count' => isset($violation['count']) ? (int) $violation['count'] : 0,
+                    ];
+                }
+
+                usort($violations[$messageThreadId], function ($a, $b) {
+                    if ($a['count'] == $b['count']) {
+                        return strcmp($a['name'], $b['name']);
+                    }
+
+                    return $a['count'] < $b['count'] ? 1 : -1;
+                });
+            }
+        }
+
+        return $violations;
+    }
+
+    /**
      * Run telebot.
      *
      * @return bool
@@ -501,6 +548,21 @@ class PHPTelebot
                 $data[$day]['__warnings'][$topicKey] = [];
             }
             $data[$day]['__warnings'][$topicKey][(string) $message['from']['id']] = true;
+            if (!isset($data[$day]['__violations']) || !is_array($data[$day]['__violations'])) {
+                $data[$day]['__violations'] = [];
+            }
+            if (!isset($data[$day]['__violations'][$topicKey]) || !is_array($data[$day]['__violations'][$topicKey])) {
+                $data[$day]['__violations'][$topicKey] = [];
+            }
+            $userId = (string) $message['from']['id'];
+            if (!isset($data[$day]['__violations'][$topicKey][$userId]) || !is_array($data[$day]['__violations'][$topicKey][$userId])) {
+                $data[$day]['__violations'][$topicKey][$userId] = [
+                    'name' => $this->messageThreadLimitUserName($message['from']),
+                    'count' => 0,
+                ];
+            }
+            $data[$day]['__violations'][$topicKey][$userId]['name'] = $this->messageThreadLimitUserName($message['from']);
+            $data[$day]['__violations'][$topicKey][$userId]['count'] = (int) $data[$day]['__violations'][$topicKey][$userId]['count'] + 1;
             $lastWarnedAt = isset($data[$day]['__last_warning'][$key]) ? (int) $data[$day]['__last_warning'][$key] : 0;
             $sendWarning = $limit['warning_cooldown'] <= 0 || $lastWarnedAt < (time() - $limit['warning_cooldown']);
             if ($sendWarning) {
@@ -576,12 +638,23 @@ class PHPTelebot
      */
     private function messageThreadLimitUserMention($user)
     {
+        $name = $this->messageThreadLimitUserName($user);
+        return '<a href="tg://user?id='.$user['id'].'">'.$this->escapeHtml($name).'</a>';
+    }
+
+    /**
+     * @param array $user
+     *
+     * @return string
+     */
+    private function messageThreadLimitUserName($user)
+    {
         $name = isset($user['first_name']) ? $user['first_name'] : 'User';
         if (isset($user['last_name']) && $user['last_name'] != '') {
             $name .= ' '.$user['last_name'];
         }
 
-        return '<a href="tg://user?id='.$user['id'].'">'.$this->escapeHtml($name).'</a>';
+        return $name;
     }
 
     /**
