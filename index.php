@@ -54,47 +54,44 @@ function configuredThreadIds($credentials)
     return $normalized;
 }
 
-$credentials = loadCredentials(__DIR__.'/x.c');
-$token = $credentials['token'];
-$username = ltrim($credentials['username'], '@');
+function satpamCodeBlock($text)
+{
+    return "```\n".str_replace('```', "'''", trim($text))."\n```";
+}
 
-$bot = new PHPTelebot($token, $username, [
-    'allowed_updates' => ['message'],
-]);
+function satpamKeyboard()
+{
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => 'Ringkasan', 'callback_data' => 'satpam:summary'],
+                ['text' => 'Leaderboard', 'callback_data' => 'satpam:leaderboard'],
+            ],
+        ],
+    ];
+}
 
-$lapakMemberChatId = isset($credentials['lapak_member_chat_id']) && $credentials['lapak_member_chat_id'] !== ''
-    ? $credentials['lapak_member_chat_id']
-    : '-1001197136417';
-$lapakMemberThreadIds = configuredThreadIds($credentials);
-$lapakMemberThreadNames = [
-    '3282669' => 'Lapak Digital',
-    '4226256' => 'Lapak Fisik',
-];
-$lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.json';
-$lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.';
-
-$bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
-    $totals = $bot->messageThreadLimitWarningTotals($lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage);
+function satpamSummaryText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+{
+    $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath);
     $text = "Tangkapan Satpam hari ini\n";
 
-    foreach ($lapakMemberThreadIds as $threadId) {
+    foreach ($threadIds as $threadId) {
         $count = isset($totals[$threadId]) ? $totals[$threadId] : 0;
-        $name = isset($lapakMemberThreadNames[$threadId]) ? $lapakMemberThreadNames[$threadId] : 'Topik '.$threadId;
+        $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
         $text .= $name.': '.$count." user kena warning\n";
     }
 
-    return Bot::sendMessage("```\n".trim($text)."\n```", [
-        'parse_mode' => 'markdown',
-        'reply' => true,
-    ]);
-});
+    return $text;
+}
 
-$bot->cmd('/satpamlb', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
-    $violations = $bot->messageThreadLimitViolations($lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage);
+function satpamLeaderboardText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+{
+    $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath);
     $text = "Leaderboard pelanggar hari ini\n";
 
-    foreach ($lapakMemberThreadIds as $threadId) {
-        $name = isset($lapakMemberThreadNames[$threadId]) ? $lapakMemberThreadNames[$threadId] : 'Topik '.$threadId;
+    foreach ($threadIds as $threadId) {
+        $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
         $text .= "\n".$name."\n";
 
         if (empty($violations[$threadId])) {
@@ -109,7 +106,58 @@ $bot->cmd('/satpamlb', function () use ($bot, $lapakMemberChatId, $lapakMemberTh
         }
     }
 
-    return Bot::sendMessage(trim($text), ['reply' => true]);
+    return $text;
+}
+
+$credentials = loadCredentials(__DIR__.'/x.c');
+$token = $credentials['token'];
+$username = ltrim($credentials['username'], '@');
+
+$bot = new PHPTelebot($token, $username, [
+    'allowed_updates' => ['message', 'callback_query'],
+]);
+
+$lapakMemberChatId = isset($credentials['lapak_member_chat_id']) && $credentials['lapak_member_chat_id'] !== ''
+    ? $credentials['lapak_member_chat_id']
+    : '-1001197136417';
+$lapakMemberThreadIds = configuredThreadIds($credentials);
+$lapakMemberThreadNames = [
+    '3282669' => 'Lapak Digital',
+    '4226256' => 'Lapak Fisik',
+];
+$lapakLimitStorage = __DIR__.'/runtime/lapak-member-limits.json';
+$lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.';
+
+$bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
+    return Bot::sendMessage(satpamCodeBlock(satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage)), [
+        'parse_mode' => 'markdown',
+        'reply' => true,
+        'reply_markup' => satpamKeyboard(),
+    ]);
+});
+
+$bot->on('callback', function ($data) use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
+    if ($data != 'satpam:summary' && $data != 'satpam:leaderboard') {
+        return false;
+    }
+
+    $callback = Bot::message();
+    if (!isset($callback['message']['message_id']) || !isset($callback['message']['chat']['id'])) {
+        return false;
+    }
+
+    Bot::answerCallbackQuery('Data hari ini');
+    $text = $data == 'satpam:leaderboard'
+        ? satpamLeaderboardText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage)
+        : satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+
+    return Bot::editMessageText([
+        'chat_id' => $callback['message']['chat']['id'],
+        'message_id' => $callback['message']['message_id'],
+        'text' => satpamCodeBlock($text),
+        'parse_mode' => 'markdown',
+        'reply_markup' => satpamKeyboard(),
+    ]);
 });
 
 // Lapak Member topics: each user may send up to 2 messages per topic per day.
@@ -117,7 +165,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
     $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
         'storage_path' => $lapakLimitStorage,
         'warning_text' => $lapakWarningText,
-        'ignored_commands' => ['/satpam', '/satpamlb'],
+        'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,

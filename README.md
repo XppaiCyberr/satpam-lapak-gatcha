@@ -22,7 +22,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Stores daily counters locally in `runtime/lapak-member-limits.json`.
 - Tracks the number of unique users who received warnings in each monitored topic.
 - Provides `/satpam` to report today's warning totals per topic.
-- Provides `/satpamlb` to list users who violated the rule and their violation counts.
+- Adds inline buttons to `/satpam` for switching between the summary and violation leaderboard.
 - Ignores the runtime counter file through `.gitignore`.
 
 ## What Changed
@@ -33,8 +33,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Wired the Lapak Member topic rules in `index.php`.
 - Added local JSON storage for per-day topic message counts.
 - Removed the old sample commands from `index.php`.
-- Added `/satpam` to show warning totals per monitored topic.
-- Added `/satpamlb` to show today's violation leaderboard per monitored topic.
+- Added `/satpam` to show warning totals and an inline leaderboard view.
 - Updated the default moderation target:
   - Chat ID: `-1001197136417`
   - Message thread/topic IDs: `3282669`, `4226256`
@@ -100,7 +99,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
     $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
         'storage_path' => __DIR__.'/runtime/lapak-member-limits.json',
         'warning_text' => 'Limit Lapak Member: setiap user maksimal %d pesan per hari.',
-        'ignored_commands' => ['/satpam', '/satpamlb'],
+        'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,
@@ -123,10 +122,11 @@ The counter resets automatically when the calendar day changes.
 
 ## Useful Commands
 
-`index.php` only includes the Satpam command:
+`index.php` only includes one command:
 
 - `/satpam` shows today's unique warned-user totals for Lapak Digital and Lapak Fisik.
-- `/satpamlb` shows who violated the rule today and how many excess messages they sent.
+- The inline `Leaderboard` button shows who violated the rule today and how many excess messages they sent.
+- The inline `Ringkasan` button returns to the summary.
 
 Example response:
 
@@ -138,7 +138,7 @@ Lapak Fisik: 0 user kena warning
 
 The `/satpam` command is ignored by the limiter, so checking status does not consume one of a user's allowed topic messages.
 
-Example `/satpamlb` response:
+Example inline leaderboard view:
 
 ```text
 Leaderboard pelanggar hari ini
@@ -150,8 +150,6 @@ Lapak Digital
 Lapak Fisik
 Belum ada pelanggar
 ```
-
-The `/satpamlb` command is also ignored by the limiter.
 
 ## Validation
 
