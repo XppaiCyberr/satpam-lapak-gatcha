@@ -75,7 +75,7 @@ $lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.
 
 $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
     $totals = $bot->messageThreadLimitWarningTotals($lapakMemberChatId, $lapakMemberThreadIds, $lapakLimitStorage);
-    $text = "Satpam Lapak hari ini\n";
+    $text = "Tangkapan Satpam hari ini\n";
 
     foreach ($lapakMemberThreadIds as $threadId) {
         $count = isset($totals[$threadId]) ? $totals[$threadId] : 0;
@@ -83,7 +83,10 @@ $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThre
         $text .= $name.': '.$count." user kena warning\n";
     }
 
-    return Bot::sendMessage(trim($text), ['reply' => true]);
+    return Bot::sendMessage("```\n".trim($text)."\n```", [
+        'parse_mode' => 'markdown',
+        'reply' => true,
+    ]);
 });
 
 $bot->cmd('/satpamlb', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {

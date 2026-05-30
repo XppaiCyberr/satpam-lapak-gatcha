@@ -131,7 +131,7 @@ The counter resets automatically when the calendar day changes.
 Example response:
 
 ```text
-Satpam Lapak hari ini
+Tangkapan Satpam hari ini
 Lapak Digital: 1 user kena warning
 Lapak Fisik: 0 user kena warning
 ```
