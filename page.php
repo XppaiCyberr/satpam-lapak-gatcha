@@ -1,3 +1,116 @@
+<?php
+$memberCount = 23324;
+$chatId = '-1001197136417';
+$topics = [
+    '3282669' => 'Lapak Digital',
+    '4226256' => 'Lapak Fisik',
+];
+$dbPath = __DIR__.'/runtime/lapak-member-limits.sqlite';
+$today = date('Y-m-d');
+
+function h($value)
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function formatNumber($value)
+{
+    return number_format((int) $value);
+}
+
+function emptyTopicStats($topics)
+{
+    $stats = [];
+    foreach ($topics as $threadId => $name) {
+        $stats[$threadId] = [
+            'name' => $name,
+            'today_warned' => 0,
+            'today_violations' => 0,
+            'total_warned' => 0,
+            'total_violations' => 0,
+            'leaderboard' => [],
+        ];
+    }
+
+    return $stats;
+}
+
+function loadStats($dbPath, $chatId, $topics, $today)
+{
+    $stats = emptyTopicStats($topics);
+    $meta = [
+        'available' => false,
+        'error' => '',
+        'last_seen' => '',
+        'days' => 0,
+    ];
+
+    if (!is_file($dbPath)) {
+        $meta['error'] = 'SQLite database has not been created yet.';
+        return [$stats, $meta];
+    }
+
+    if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers())) {
+        $meta['error'] = 'PDO SQLite is not available on this PHP runtime.';
+        return [$stats, $meta];
+    }
+
+    try {
+        $db = new PDO('sqlite:'.$dbPath);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $meta['available'] = true;
+
+        $last = $db->query('SELECT MAX(day) FROM message_thread_limits')->fetchColumn();
+        $days = $db->query('SELECT COUNT(DISTINCT day) FROM message_thread_limits')->fetchColumn();
+        $meta['last_seen'] = $last ? $last : '';
+        $meta['days'] = (int) $days;
+
+        foreach ($topics as $threadId => $name) {
+            $stmt = $db->prepare('SELECT COUNT(DISTINCT user_id) FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ? AND warned = 1');
+            $stmt->execute([$today, $chatId, (string) $threadId]);
+            $stats[$threadId]['today_warned'] = (int) $stmt->fetchColumn();
+
+            $stmt = $db->prepare('SELECT COALESCE(SUM(violation_count), 0) FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ?');
+            $stmt->execute([$today, $chatId, (string) $threadId]);
+            $stats[$threadId]['today_violations'] = (int) $stmt->fetchColumn();
+
+            $stmt = $db->prepare('SELECT COUNT(DISTINCT user_id) FROM message_thread_limits WHERE chat_id = ? AND thread_id = ? AND warned = 1');
+            $stmt->execute([$chatId, (string) $threadId]);
+            $stats[$threadId]['total_warned'] = (int) $stmt->fetchColumn();
+
+            $stmt = $db->prepare('SELECT COALESCE(SUM(violation_count), 0) FROM message_thread_limits WHERE chat_id = ? AND thread_id = ?');
+            $stmt->execute([$chatId, (string) $threadId]);
+            $stats[$threadId]['total_violations'] = (int) $stmt->fetchColumn();
+
+            $stmt = $db->prepare('SELECT user_id, MAX(name) AS name, SUM(violation_count) AS count FROM message_thread_limits WHERE day = ? AND chat_id = ? AND thread_id = ? AND violation_count > 0 GROUP BY user_id ORDER BY count DESC, name ASC LIMIT 5');
+            $stmt->execute([$today, $chatId, (string) $threadId]);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $stats[$threadId]['leaderboard'][] = [
+                    'name' => $row['name'] != '' ? $row['name'] : 'User '.$row['user_id'],
+                    'count' => (int) $row['count'],
+                ];
+            }
+        }
+    } catch (Exception $e) {
+        $meta['available'] = false;
+        $meta['error'] = $e->getMessage();
+    }
+
+    return [$stats, $meta];
+}
+
+list($stats, $meta) = loadStats($dbPath, $chatId, $topics, $today);
+$todayWarned = 0;
+$todayViolations = 0;
+$totalWarned = 0;
+$totalViolations = 0;
+foreach ($stats as $topicStats) {
+    $todayWarned += $topicStats['today_warned'];
+    $todayViolations += $topicStats['today_violations'];
+    $totalWarned += $topicStats['total_warned'];
+    $totalViolations += $topicStats['total_violations'];
+}
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -452,6 +565,47 @@
       border-bottom: 0;
     }
 
+    .leaderboard {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .miniList {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .miniList li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .miniList li:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .miniList b {
+      color: var(--ink);
+    }
+
+    .notice {
+      background: #fff9ed;
+      border: 1px solid #ead3a6;
+      color: #755110;
+      border-radius: 8px;
+      padding: 14px 16px;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
     .footer {
       color: var(--muted);
       font-size: 13px;
@@ -496,7 +650,8 @@
 
       .stats,
       .twoCol,
-      .flow {
+      .flow,
+      .leaderboard {
         grid-template-columns: 1fr;
       }
 
@@ -531,11 +686,11 @@
 
       <div class="sideStat">
         <div>
-          <strong>23,324</strong>
+          <strong><?= h(formatNumber($memberCount)) ?></strong>
           total Telegram members
         </div>
         <div>
-          <strong>2</strong>
+          <strong><?= h(count($topics)) ?></strong>
           monitored marketplace topics
         </div>
       </div>
@@ -571,8 +726,9 @@
               </div>
               <div class="bubble">
                 <b>Tangkapan Satpam hari ini</b><br>
-                Lapak Digital: 1 user kena warning<br>
-                Lapak Fisik: 0 user kena warning
+                <?php foreach ($topics as $threadId => $name): ?>
+                  <?= h($name) ?>: <?= h($stats[$threadId]['today_warned']) ?> user kena warning<br>
+                <?php endforeach; ?>
               </div>
               <div class="inlineKeys">
                 <span>Ringkasan</span>
@@ -587,25 +743,29 @@
       <section class="grid stats" id="stats">
         <div class="card metric">
           <span>Total Members</span>
-          <strong>23,324</strong>
+          <strong><?= h(formatNumber($memberCount)) ?></strong>
           <p>Current Gatcha Telegram community size provided for this dashboard.</p>
         </div>
         <div class="card metric">
-          <span>Daily Post Limit</span>
-          <strong>2x</strong>
-          <p>Each user can post twice per monitored topic each calendar day.</p>
+          <span>Warned Today</span>
+          <strong><?= h(formatNumber($todayWarned)) ?></strong>
+          <p>Unique users who triggered warnings today across monitored topics.</p>
         </div>
         <div class="card metric">
-          <span>Warning Cooldown</span>
-          <strong>300s</strong>
-          <p>Repeated spam is deleted, but warning replies are throttled per user and topic.</p>
+          <span>Violations Today</span>
+          <strong><?= h(formatNumber($todayViolations)) ?></strong>
+          <p>Excess messages deleted and counted today.</p>
         </div>
         <div class="card metric">
-          <span>Storage</span>
-          <strong>SQLite</strong>
-          <p>Daily counters, warnings, and total reports are retained locally.</p>
+          <span>Total Violations</span>
+          <strong><?= h(formatNumber($totalViolations)) ?></strong>
+          <p>All retained violations stored in SQLite.</p>
         </div>
       </section>
+
+      <?php if (!$meta['available']): ?>
+        <div class="notice">SQLite stats are not available yet: <?= h($meta['error']) ?></div>
+      <?php endif; ?>
 
       <section class="section" id="rules">
         <div class="sectionHeader">
@@ -614,29 +774,20 @@
         </div>
 
         <div class="grid twoCol">
+          <?php foreach ($topics as $threadId => $name): ?>
           <div class="card topic">
             <div class="topicTitle">
-              <h4>Lapak Digital</h4>
-              <span class="pill">topic 3282669</span>
+              <h4><?= h($name) ?></h4>
+              <span class="pill">topic <?= h($threadId) ?></span>
             </div>
             <ul>
               <li><span class="dot"></span><span>Daily user post limit: 2 messages.</span></li>
-              <li><span class="dot"></span><span>Third and later messages are deleted.</span></li>
+              <li><span class="dot"></span><span><?= h(formatNumber($stats[$threadId]['today_warned'])) ?> users warned today.</span></li>
+              <li><span class="dot"></span><span><?= h(formatNumber($stats[$threadId]['total_violations'])) ?> retained total violations.</span></li>
               <li><span class="dot"></span><span>Violators are mentioned in a warning reply.</span></li>
             </ul>
           </div>
-
-          <div class="card topic">
-            <div class="topicTitle">
-              <h4>Lapak Fisik</h4>
-              <span class="pill">topic 4226256</span>
-            </div>
-            <ul>
-              <li><span class="dot"></span><span>Daily user post limit: 2 messages.</span></li>
-              <li><span class="dot"></span><span>Sender-tagged users or messages are whitelisted.</span></li>
-              <li><span class="dot"></span><span>Reports are available through the /satpam inline buttons.</span></li>
-            </ul>
-          </div>
+          <?php endforeach; ?>
         </div>
       </section>
 
@@ -663,6 +814,33 @@
             <b>4. Report stats</b>
             <p>/satpam opens summary, leaderboard, and total stats through inline buttons.</p>
           </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="sectionHeader">
+          <h3>Live Leaderboard Today</h3>
+          <p>Read directly from <code>runtime/lapak-member-limits.sqlite</code>. Counts show excess messages after the 2-post daily limit.</p>
+        </div>
+
+        <div class="grid leaderboard">
+          <?php foreach ($topics as $threadId => $name): ?>
+            <div class="card topic">
+              <div class="topicTitle">
+                <h4><?= h($name) ?></h4>
+                <span class="pill"><?= h(formatNumber($stats[$threadId]['today_violations'])) ?> today</span>
+              </div>
+              <?php if (empty($stats[$threadId]['leaderboard'])): ?>
+                <p class="footer">Belum ada pelanggar hari ini.</p>
+              <?php else: ?>
+                <ol class="miniList">
+                  <?php foreach ($stats[$threadId]['leaderboard'] as $row): ?>
+                    <li><b><?= h($row['name']) ?></b><span><?= h(formatNumber($row['count'])) ?> pelanggaran</span></li>
+                  <?php endforeach; ?>
+                </ol>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
         </div>
       </section>
 
@@ -693,8 +871,8 @@
             </tr>
             <tr>
               <td>Total</td>
-              <td>All retained warned users and violation counts per topic</td>
-              <td>SQLite history</td>
+              <td><?= h(formatNumber($totalWarned)) ?> retained warned users, <?= h(formatNumber($totalViolations)) ?> retained violations</td>
+              <td><?= h($meta['days']) ?> stored day<?= $meta['days'] == 1 ? '' : 's' ?></td>
             </tr>
             <tr>
               <td>Ringkasan</td>
@@ -706,8 +884,8 @@
       </section>
 
       <p class="footer">
-        Static page generated for Satpam Lapak Gatcha. Runtime statistics are stored by the bot in
-        <code>runtime/lapak-member-limits.sqlite</code>; connect this page to a backend endpoint if live database values are required.
+        Runtime statistics are read from <code>runtime/lapak-member-limits.sqlite</code>.
+        <?php if ($meta['last_seen'] != ''): ?> Last stored activity date: <?= h($meta['last_seen']) ?>.<?php endif; ?>
       </p>
     </main>
   </div>

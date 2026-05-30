@@ -161,11 +161,16 @@ Lapak Digital: 4 user, 9 pelanggaran
 Lapak Fisik: 1 user, 2 pelanggaran
 ```
 
+## Web Stats Page
+
+`page.php` displays a browser dashboard for Satpam Lapak Gatcha and reads live stats from `runtime/lapak-member-limits.sqlite`. It shows the Gatcha Telegram group context, member count, monitored topics, today totals, retained totals, and today's leaderboard.
+
 ## Validation
 
 Run PHP syntax checks:
 
 ```shell
+php -l page.php
 php -l src/PHPTelebot.php
 php -l src/Bot.php
 php -l index.php
