@@ -22,7 +22,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Stores daily counters locally in `runtime/lapak-member-limits.json`.
 - Tracks the number of unique users who received warnings in each monitored topic.
 - Provides `/satpam` to report today's warning totals per topic.
-- Adds inline buttons to `/satpam` for switching between the summary and violation leaderboard.
+- Adds inline buttons to `/satpam` for switching between today's summary, today's violation leaderboard, and retained total data.
 - Ignores the runtime counter file through `.gitignore`.
 
 ## What Changed
@@ -33,7 +33,7 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Wired the Lapak Member topic rules in `index.php`.
 - Added local JSON storage for per-day topic message counts.
 - Removed the old sample commands from `index.php`.
-- Added `/satpam` to show warning totals and an inline leaderboard view.
+- Added `/satpam` to show warning totals, an inline leaderboard view, and a total view.
 - Updated the default moderation target:
   - Chat ID: `-1001197136417`
   - Message thread/topic IDs: `3282669`, `4226256`
@@ -118,7 +118,7 @@ If the user is still within the limit, the message is counted and normal bot han
 
 Repeated excess messages from the same user in the same topic are still deleted, but the warning text is only sent once per cooldown window. The default cooldown is 300 seconds.
 
-The counter resets automatically when the calendar day changes.
+The counter resets automatically when the calendar day changes. Older day buckets are retained in `runtime/lapak-member-limits.json` so the inline `Total` view can aggregate them.
 
 ## Useful Commands
 
@@ -127,6 +127,7 @@ The counter resets automatically when the calendar day changes.
 - `/satpam` shows today's unique warned-user totals for Lapak Digital and Lapak Fisik.
 - The inline `Leaderboard` button shows who violated the rule today and how many excess messages they sent.
 - The inline `Ringkasan` button returns to the summary.
+- The inline `Total` button shows retained all-time totals from local storage.
 
 Example response:
 
@@ -149,6 +150,14 @@ Lapak Digital
 
 Lapak Fisik
 Belum ada pelanggar
+```
+
+Example inline total view:
+
+```text
+Total Tangkapan Satpam
+Lapak Digital: 4 user, 9 pelanggaran
+Lapak Fisik: 1 user, 2 pelanggaran
 ```
 
 ## Validation

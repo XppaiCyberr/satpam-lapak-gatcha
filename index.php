@@ -66,6 +66,7 @@ function satpamKeyboard()
             [
                 ['text' => 'Ringkasan', 'callback_data' => 'satpam:summary'],
                 ['text' => 'Leaderboard', 'callback_data' => 'satpam:leaderboard'],
+                ['text' => 'Total', 'callback_data' => 'satpam:total'],
             ],
         ],
     ];
@@ -109,6 +110,28 @@ function satpamLeaderboardText($bot, $chatId, $threadIds, $threadNames, $storage
     return $text;
 }
 
+function satpamTotalText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+{
+    $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath, '*');
+    $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath, '*');
+    $text = "Total Tangkapan Satpam\n";
+
+    foreach ($threadIds as $threadId) {
+        $warningCount = isset($totals[$threadId]) ? $totals[$threadId] : 0;
+        $violationCount = 0;
+        if (isset($violations[$threadId])) {
+            foreach ($violations[$threadId] as $violation) {
+                $violationCount += $violation['count'];
+            }
+        }
+
+        $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
+        $text .= $name.': '.$warningCount.' user, '.$violationCount." pelanggaran\n";
+    }
+
+    return $text;
+}
+
 $credentials = loadCredentials(__DIR__.'/x.c');
 $token = $credentials['token'];
 $username = ltrim($credentials['username'], '@');
@@ -137,7 +160,7 @@ $bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThre
 });
 
 $bot->on('callback', function ($data) use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
-    if ($data != 'satpam:summary' && $data != 'satpam:leaderboard') {
+    if ($data != 'satpam:summary' && $data != 'satpam:leaderboard' && $data != 'satpam:total') {
         return false;
     }
 
@@ -146,10 +169,14 @@ $bot->on('callback', function ($data) use ($bot, $lapakMemberChatId, $lapakMembe
         return false;
     }
 
-    Bot::answerCallbackQuery('Data hari ini');
-    $text = $data == 'satpam:leaderboard'
-        ? satpamLeaderboardText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage)
-        : satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+    Bot::answerCallbackQuery($data == 'satpam:total' ? 'Data total' : 'Data hari ini');
+    if ($data == 'satpam:leaderboard') {
+        $text = satpamLeaderboardText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+    } elseif ($data == 'satpam:total') {
+        $text = satpamTotalText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+    } else {
+        $text = satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+    }
 
     return Bot::editMessageText([
         'chat_id' => $callback['message']['chat']['id'],

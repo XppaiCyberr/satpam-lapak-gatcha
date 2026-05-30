@@ -181,7 +181,17 @@ class PHPTelebot
 
             $topicKey = $chatId.':'.$messageThreadId;
             $totals[$messageThreadId] = 0;
-            if (isset($data[$day]['__warnings'][$topicKey]) && is_array($data[$day]['__warnings'][$topicKey])) {
+            if ($day == '*') {
+                $warnedUsers = [];
+                foreach ($data as $dayData) {
+                    if (isset($dayData['__warnings'][$topicKey]) && is_array($dayData['__warnings'][$topicKey])) {
+                        foreach ($dayData['__warnings'][$topicKey] as $userId => $warned) {
+                            $warnedUsers[$userId] = true;
+                        }
+                    }
+                }
+                $totals[$messageThreadId] = count($warnedUsers);
+            } elseif (isset($data[$day]['__warnings'][$topicKey]) && is_array($data[$day]['__warnings'][$topicKey])) {
                 $totals[$messageThreadId] = count($data[$day]['__warnings'][$topicKey]);
             }
         }
@@ -214,26 +224,50 @@ class PHPTelebot
 
             $topicKey = $chatId.':'.$messageThreadId;
             $violations[$messageThreadId] = [];
-            if (isset($data[$day]['__violations'][$topicKey]) && is_array($data[$day]['__violations'][$topicKey])) {
-                foreach ($data[$day]['__violations'][$topicKey] as $userId => $violation) {
-                    $violations[$messageThreadId][] = [
-                        'user_id' => $userId,
-                        'name' => isset($violation['name']) ? $violation['name'] : 'User '.$userId,
-                        'count' => isset($violation['count']) ? (int) $violation['count'] : 0,
-                    ];
+            $items = [];
+            if ($day == '*') {
+                foreach ($data as $dayData) {
+                    if (isset($dayData['__violations'][$topicKey]) && is_array($dayData['__violations'][$topicKey])) {
+                        $this->mergeMessageThreadLimitViolations($items, $dayData['__violations'][$topicKey]);
+                    }
+                }
+            } elseif (isset($data[$day]['__violations'][$topicKey]) && is_array($data[$day]['__violations'][$topicKey])) {
+                $this->mergeMessageThreadLimitViolations($items, $data[$day]['__violations'][$topicKey]);
+            }
+
+            $violations[$messageThreadId] = array_values($items);
+            usort($violations[$messageThreadId], function ($a, $b) {
+                if ($a['count'] == $b['count']) {
+                    return strcmp($a['name'], $b['name']);
                 }
 
-                usort($violations[$messageThreadId], function ($a, $b) {
-                    if ($a['count'] == $b['count']) {
-                        return strcmp($a['name'], $b['name']);
-                    }
-
-                    return $a['count'] < $b['count'] ? 1 : -1;
-                });
-            }
+                return $a['count'] < $b['count'] ? 1 : -1;
+            });
         }
 
         return $violations;
+    }
+
+    /**
+     * @param array $items
+     * @param array $storedViolations
+     */
+    private function mergeMessageThreadLimitViolations(&$items, $storedViolations)
+    {
+        foreach ($storedViolations as $userId => $violation) {
+            if (!isset($items[$userId])) {
+                $items[$userId] = [
+                    'user_id' => $userId,
+                    'name' => isset($violation['name']) ? $violation['name'] : 'User '.$userId,
+                    'count' => 0,
+                ];
+            }
+
+            if (isset($violation['name']) && $violation['name'] != '') {
+                $items[$userId]['name'] = $violation['name'];
+            }
+            $items[$userId]['count'] += isset($violation['count']) ? (int) $violation['count'] : 0;
+        }
     }
 
     /**
@@ -530,13 +564,7 @@ class PHPTelebot
         $topicKey = $message['chat']['id'].':'.$threadId;
 
         if (!isset($data[$day])) {
-            $data = [$day => []];
-        } else {
-            foreach (array_keys($data) as $storedDay) {
-                if ($storedDay != $day) {
-                    unset($data[$storedDay]);
-                }
-            }
+            $data[$day] = [];
         }
 
         $count = isset($data[$day][$key]) ? (int) $data[$day][$key] : 0;
