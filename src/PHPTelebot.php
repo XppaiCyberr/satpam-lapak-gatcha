@@ -152,6 +152,7 @@ class PHPTelebot
             'ignored_commands' => isset($options['ignored_commands']) && is_array($options['ignored_commands']) ? $options['ignored_commands'] : [],
             'warning_cooldown' => isset($options['warning_cooldown']) ? (int) $options['warning_cooldown'] : 300,
             'mention_user' => isset($options['mention_user']) ? (bool) $options['mention_user'] : false,
+            'whitelist_sender_tag' => isset($options['whitelist_sender_tag']) ? (bool) $options['whitelist_sender_tag'] : false,
         ];
     }
 
@@ -466,6 +467,10 @@ class PHPTelebot
             return false;
         }
 
+        if ($limit['whitelist_sender_tag'] && $this->messageHasSenderTag($message)) {
+            return false;
+        }
+
         if ($this->isIgnoredMessageThreadLimitCommand($message, $limit)) {
             return false;
         }
@@ -548,6 +553,20 @@ class PHPTelebot
         $this->writeThreadLimitData($path, $data);
 
         return false;
+    }
+
+    /**
+     * @param array $message
+     *
+     * @return bool
+     */
+    private function messageHasSenderTag($message)
+    {
+        if (isset($message['sender_tag']) && $message['sender_tag'] !== '') {
+            return true;
+        }
+
+        return isset($message['from']['sender_tag']) && $message['from']['sender_tag'] !== '';
     }
 
     /**

@@ -10,6 +10,7 @@ This project is based on PHPTelebot, with a small moderation layer added for Lap
 - Monitors only these Lapak Member topic/thread IDs: `3282669` and `4226256`.
 - Counts messages per Telegram user per calendar day.
 - Allows the first 2 messages from each user in each monitored topic.
+- Whitelists users/messages that include `sender_tag`.
 - Deletes the 3rd and later messages from the same user in the same topic on the same day.
 - Sends the warning as a reply to the violating user's message and mentions the user.
 - Throttles repeated warnings for the same user/topic to avoid warning spam during bursts.
@@ -100,6 +101,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
         'mention_user' => true,
+        'whitelist_sender_tag' => true,
     ]);
 }
 ```
@@ -108,6 +110,7 @@ For each new `message` update, the bot checks:
 
 - The message is from chat `-1001197136417`.
 - The message has `message_thread_id` `3282669` or `4226256`.
+- The sender does not have `sender_tag`.
 - The sender has not exceeded 2 messages for that topic on the current day.
 
 If the user is still within the limit, the message is counted and normal bot handling continues. If the user is over the limit, the bot records that user as warned for the topic, deletes the message, and sends the warning text as a reply in the same topic. The warning mentions the violating user.

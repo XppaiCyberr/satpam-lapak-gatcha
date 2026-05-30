@@ -94,6 +94,7 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'ignored_commands' => ['/satpam'],
         'warning_cooldown' => 300,
         'mention_user' => true,
+        'whitelist_sender_tag' => true,
     ]);
 }
 
