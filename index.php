@@ -58,10 +58,10 @@ $bot = new PHPTelebot($token, $username, [
 
 $lapakMemberChatId = isset($credentials['lapak_member_chat_id']) && $credentials['lapak_member_chat_id'] !== ''
     ? $credentials['lapak_member_chat_id']
-    : null;
+    : '-1001197136417';
 $lapakMemberThreadId = isset($credentials['lapak_member_thread_id']) && $credentials['lapak_member_thread_id'] !== ''
     ? $credentials['lapak_member_thread_id']
-    : '-1001197136417';
+    : '3282669';
 
 // Lapak Member topic: each user may send up to 2 messages per day.
 $bot->enforceMessageThreadLimit($lapakMemberChatId, $lapakMemberThreadId, 2, [
