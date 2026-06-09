@@ -69,6 +69,32 @@ function ensureDashboardSchema($db)
         count INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (day, hour, chat_id)
     )');
+    $db->exec('CREATE TABLE IF NOT EXISTS chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL DEFAULT "",
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT "",
+        username TEXT NOT NULL DEFAULT "",
+        text TEXT NOT NULL DEFAULT "",
+        media_type TEXT NOT NULL DEFAULT "",
+        file_id TEXT NOT NULL DEFAULT "",
+        date INTEGER NOT NULL
+    )');
+    $columns = [];
+    $result = $db->query('PRAGMA table_info(chats)');
+    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+        $columns[$row['name']] = true;
+    }
+    if (!isset($columns['media_type'])) {
+        $db->exec('ALTER TABLE chats ADD COLUMN media_type TEXT NOT NULL DEFAULT ""');
+    }
+    if (!isset($columns['file_id'])) {
+        $db->exec('ALTER TABLE chats ADD COLUMN file_id TEXT NOT NULL DEFAULT ""');
+    }
+    $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_msg_chat ON chats (chat_id, message_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_chats_date ON chats (date)');
 }
 
 function loadStats($dbPath, $chatId, $topics, $today)
@@ -163,6 +189,7 @@ function loadStats($dbPath, $chatId, $topics, $today)
 
     return [$stats, $messageStats, $meta];
 }
+
 
 list($stats, $messageStats, $meta) = loadStats($dbPath, $chatId, $topics, $today);
 $todayWarned = 0;
@@ -686,6 +713,7 @@ foreach ($stats as $topicStats) {
       padding: 8px 0 20px;
     }
 
+
     @media (max-width: 1060px) {
       .shell {
         grid-template-columns: 1fr;
@@ -755,6 +783,7 @@ foreach ($stats as $topicStats) {
         <a href="#rules">Rules <span>02</span></a>
         <a href="#stats">Stats <span>03</span></a>
         <a href="#commands">Commands <span>04</span></a>
+        <a href="monitor.php">Monitor <span>05</span></a>
       </nav>
 
       <div class="sideStat">
@@ -983,6 +1012,7 @@ foreach ($stats as $topicStats) {
           </tbody>
         </table>
       </section>
+
 
       <p class="footer">
         Runtime statistics are read from <code>runtime/lapak-member-limits.sqlite</code>.

@@ -565,10 +565,45 @@ class PHPTelebot
             $time = isset($message['date']) ? $message['date'] : time();
             $day = date('Y-m-d', $time);
             $hour = date('H:00', $time);
+            if (isset($message['message_thread_id'])) {
+                $topicName = '';
+                if (isset($message['forum_topic_created']['name'])) {
+                    $topicName = $message['forum_topic_created']['name'];
+                } elseif (isset($message['forum_topic_edited']['name'])) {
+                    $topicName = $message['forum_topic_edited']['name'];
+                }
+                $stmt = $db->prepare('INSERT OR IGNORE INTO chat_topics (chat_id, thread_id, name, updated_at) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$config['chat_id'], (string) $message['message_thread_id'], $topicName, $time]);
+                if ($topicName != '') {
+                    $stmt = $db->prepare('UPDATE chat_topics SET name = ?, updated_at = ? WHERE chat_id = ? AND thread_id = ?');
+                    $stmt->execute([$topicName, $time, $config['chat_id'], (string) $message['message_thread_id']]);
+                }
+            }
             $stmt = $db->prepare('INSERT OR IGNORE INTO group_message_stats (day, hour, chat_id, count) VALUES (?, ?, ?, 0)');
             $stmt->execute([$day, $hour, $config['chat_id']]);
             $stmt = $db->prepare('UPDATE group_message_stats SET count = count + 1 WHERE day = ? AND hour = ? AND chat_id = ?');
             $stmt->execute([$day, $hour, $config['chat_id']]);
+
+            if (isset($message['message_id'])) {
+                $threadId = isset($message['message_thread_id']) ? (string) $message['message_thread_id'] : '';
+                $userId = isset($message['from']['id']) ? (string) $message['from']['id'] : '';
+                $name = isset($message['from']) ? $this->messageThreadLimitUserName($message['from']) : '';
+                $username = isset($message['from']['username']) ? (string) $message['from']['username'] : '';
+                $type = Bot::type();
+                $text = isset($message['text']) ? $message['text'] : (isset($message['caption']) ? $message['caption'] : '['.$type.']');
+                $fileId = '';
+                if ($type == 'sticker' && isset($message['sticker']['file_id'])) {
+                    $fileId = $message['sticker']['file_id'];
+                } elseif ($type == 'photo' && isset($message['photo']) && is_array($message['photo'])) {
+                    $photo = end($message['photo']);
+                    $fileId = isset($photo['file_id']) ? $photo['file_id'] : '';
+                } elseif (isset($message[$type]['file_id'])) {
+                    $fileId = $message[$type]['file_id'];
+                }
+                $mediaType = $fileId != '' ? $type : '';
+                $stmt = $db->prepare('INSERT OR IGNORE INTO chats (message_id, chat_id, thread_id, user_id, name, username, text, media_type, file_id, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([(string) $message['message_id'], $config['chat_id'], $threadId, $userId, $name, $username, $text, $mediaType, $fileId, $time]);
+            }
         }
     }
 
@@ -801,9 +836,50 @@ class PHPTelebot
             PRIMARY KEY (day, hour, chat_id)
         )');
         $db->exec('CREATE INDEX IF NOT EXISTS idx_group_message_stats_chat ON group_message_stats (chat_id, day)');
+        $db->exec('CREATE TABLE IF NOT EXISTS chats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id TEXT NOT NULL,
+            chat_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL DEFAULT "",
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT "",
+            username TEXT NOT NULL DEFAULT "",
+            text TEXT NOT NULL DEFAULT "",
+            media_type TEXT NOT NULL DEFAULT "",
+            file_id TEXT NOT NULL DEFAULT "",
+            date INTEGER NOT NULL
+        )');
+        $this->ensureChatMediaColumns($db);
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_msg_chat ON chats (chat_id, message_id)');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_chats_date ON chats (date)');
+        $db->exec('CREATE TABLE IF NOT EXISTS chat_topics (
+            chat_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT "",
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (chat_id, thread_id)
+        )');
         $this->migrateThreadLimitJsonStorage($db, $path);
 
         return $db;
+    }
+
+    /**
+     * @param PDO $db
+     */
+    private function ensureChatMediaColumns($db)
+    {
+        $columns = [];
+        $result = $db->query('PRAGMA table_info(chats)');
+        while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+            $columns[$row['name']] = true;
+        }
+        if (!isset($columns['media_type'])) {
+            $db->exec('ALTER TABLE chats ADD COLUMN media_type TEXT NOT NULL DEFAULT ""');
+        }
+        if (!isset($columns['file_id'])) {
+            $db->exec('ALTER TABLE chats ADD COLUMN file_id TEXT NOT NULL DEFAULT ""');
+        }
     }
 
     /**
