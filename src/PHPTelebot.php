@@ -157,6 +157,8 @@ class PHPTelebot
             'warning_cooldown' => isset($options['warning_cooldown']) ? (int) $options['warning_cooldown'] : 300,
             'mention_user' => isset($options['mention_user']) ? (bool) $options['mention_user'] : false,
             'whitelist_sender_tag' => isset($options['whitelist_sender_tag']) ? (bool) $options['whitelist_sender_tag'] : false,
+            'ban_after_violations' => isset($options['ban_after_violations']) ? (int) $options['ban_after_violations'] : 0,
+            'ban_text' => isset($options['ban_text']) ? $options['ban_text'] : 'User dibanned setelah mencapai %d pelanggaran.',
         ];
     }
 
@@ -673,6 +675,43 @@ class PHPTelebot
             $sendWarning = $limit['warning_cooldown'] <= 0 || $lastWarnedAt < (time() - $limit['warning_cooldown']);
             $stmt = $db->prepare('UPDATE message_thread_limits SET name = ?, warned = 1, violation_count = violation_count + 1, last_warning = ? WHERE day = ? AND chat_id = ? AND thread_id = ? AND user_id = ?');
             $stmt->execute([$userName, $sendWarning ? time() : $lastWarnedAt, $day, $chatId, $threadId, $userId]);
+
+            if ($limit['ban_after_violations'] > 0) {
+                $stmt = $db->prepare('SELECT COALESCE(SUM(violation_count), 0) FROM message_thread_limits WHERE chat_id = ? AND user_id = ?');
+                $stmt->execute([$chatId, $userId]);
+                $totalViolations = (int) $stmt->fetchColumn();
+
+                if ($totalViolations >= $limit['ban_after_violations']) {
+                    $banResult = json_decode(Bot::banChatMember([
+                        'chat_id' => $message['chat']['id'],
+                        'user_id' => $message['from']['id'],
+                    ]), true);
+
+                    if (isset($banResult['ok']) && $banResult['ok']) {
+                        $options = [
+                            'chat_id' => $message['chat']['id'],
+                            'text' => sprintf($limit['ban_text'], $limit['ban_after_violations']),
+                        ];
+                        if ($limit['mention_user']) {
+                            $options['text'] = $this->messageThreadLimitUserMention($message['from']).' '.$options['text'];
+                            $options['parse_mode'] = 'html';
+                        }
+                        if (isset($message['message_thread_id'])) {
+                            $options['message_thread_id'] = $message['message_thread_id'];
+                        }
+                        Bot::sendMessage($options);
+
+                        if ($limit['delete_message']) {
+                            Bot::deleteMessage([
+                                'chat_id' => $message['chat']['id'],
+                                'message_id' => $message['message_id'],
+                            ]);
+                        }
+
+                        return '-- Banned --';
+                    }
+                }
+            }
 
             if (!$sendWarning) {
                 if ($limit['delete_message']) {

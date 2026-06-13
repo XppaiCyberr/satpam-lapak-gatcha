@@ -252,7 +252,7 @@ class Bot
     private static function needsChatId($action)
     {
         return in_array($action, [
-            'sendMessage', 'forwardMessage', 'forwardMessages', 'copyMessage', 'copyMessages',
+            'sendMessage', 'sendRichMessage', 'forwardMessage', 'forwardMessages', 'copyMessage', 'copyMessages',
             'sendPhoto', 'sendAudio', 'sendDocument', 'sendVideo', 'sendAnimation',
             'sendVoice', 'sendVideoNote', 'sendPaidMedia', 'sendMediaGroup', 'sendLocation',
             'sendVenue', 'sendContact', 'sendPoll', 'sendDice', 'sendChatAction',
@@ -300,7 +300,7 @@ class Bot
     private static function supportsMessageThread($action)
     {
         return in_array($action, [
-            'sendMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
+            'sendMessage', 'sendRichMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
             'sendDocument', 'sendPaidMedia', 'sendSticker', 'sendVideoNote', 'sendVoice',
             'sendLocation', 'sendVenue', 'sendContact', 'sendPoll', 'sendDice',
             'sendInvoice', 'sendGame', 'sendMediaGroup', 'sendChatAction', 'copyMessage',
@@ -317,7 +317,7 @@ class Bot
     private static function supportsDirectMessagesTopic($action)
     {
         return in_array($action, [
-            'sendMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
+            'sendMessage', 'sendRichMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
             'sendDocument', 'sendPaidMedia', 'sendSticker', 'sendVideoNote', 'sendVoice',
             'sendLocation', 'sendVenue', 'sendContact', 'sendPoll', 'sendDice',
             'sendInvoice', 'sendGame', 'sendMediaGroup', 'sendChatAction', 'copyMessage',
@@ -334,7 +334,7 @@ class Bot
     private static function supportsBusinessConnection($action)
     {
         return in_array($action, [
-            'sendMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
+            'sendMessage', 'sendRichMessage', 'sendPhoto', 'sendVideo', 'sendAnimation', 'sendAudio',
             'sendDocument', 'sendPaidMedia', 'sendSticker', 'sendVideoNote', 'sendVoice',
             'sendLocation', 'sendVenue', 'sendContact', 'sendPoll', 'sendDice',
             'sendGame', 'sendMediaGroup', 'sendChatAction', 'sendLivePhoto',

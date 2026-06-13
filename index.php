@@ -54,9 +54,38 @@ function configuredThreadIds($credentials)
     return $normalized;
 }
 
-function satpamCodeBlock($text)
+function satpamRichEscape($value)
 {
-    return "```\n".str_replace('```', "'''", trim($text))."\n```";
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function satpamRichTable($title, $headers, $rows, $footer)
+{
+    $html = '<h2>'.satpamRichEscape($title).'</h2>';
+    $html .= '<table bordered striped><tr>';
+    foreach ($headers as $header) {
+        $html .= '<th>'.satpamRichEscape($header).'</th>';
+    }
+    $html .= '</tr>';
+
+    foreach ($rows as $row) {
+        $html .= '<tr>';
+        foreach ($row as $index => $value) {
+            $align = is_numeric($value) ? ' align="right"' : ' align="left"';
+            $html .= '<td'.$align.'>'.satpamRichEscape($value).'</td>';
+        }
+        $html .= '</tr>';
+    }
+
+    $html .= '</table>';
+    if ($footer != '') {
+        $html .= '<footer>'.satpamRichEscape($footer).'</footer>';
+    }
+
+    return [
+        'html' => $html,
+        'skip_entity_detection' => true,
+    ];
 }
 
 function satpamKeyboard()
@@ -72,49 +101,48 @@ function satpamKeyboard()
     ];
 }
 
-function satpamSummaryText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+function satpamSummaryRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
     $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath);
-    $text = "Tangkapan Satpam hari ini\n";
+    $rows = [];
 
     foreach ($threadIds as $threadId) {
         $count = isset($totals[$threadId]) ? $totals[$threadId] : 0;
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
-        $text .= $name.': '.$count." user kena warning\n";
+        $rows[] = [$name, $count];
     }
 
-    return $text;
+    return satpamRichTable('Tangkapan Satpam Hari Ini', ['Topik', 'User Kena Warning'], $rows, 'Batas: 2 pesan per user per topik per hari.');
 }
 
-function satpamLeaderboardText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+function satpamLeaderboardRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
-    $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath);
-    $text = "Leaderboard pelanggar hari ini\n";
+    $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath, '*');
+    $rows = [];
 
     foreach ($threadIds as $threadId) {
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
-        $text .= "\n".$name."\n";
-
-        if (empty($violations[$threadId])) {
-            $text .= "Belum ada pelanggar\n";
-            continue;
-        }
-
-        $rank = 1;
-        foreach ($violations[$threadId] as $violation) {
-            $text .= $rank.'. '.$violation['name'].' - '.$violation['count']." pelanggaran\n";
-            $rank++;
+        if (!empty($violations[$threadId])) {
+            $rank = 1;
+            foreach ($violations[$threadId] as $violation) {
+                $rows[] = [$rank, $name, $violation['name'], $violation['count']];
+                $rank++;
+            }
         }
     }
 
-    return $text;
+    if (empty($rows)) {
+        $rows[] = ['-', '-', 'Belum ada pelanggar', 0];
+    }
+
+    return satpamRichTable('Leaderboard Pelanggar', ['#', 'Topik', 'User', 'Pelanggaran'], $rows, 'Data sepanjang waktu. User dibanned setelah 3 pelanggaran.');
 }
 
-function satpamTotalText($bot, $chatId, $threadIds, $threadNames, $storagePath)
+function satpamTotalRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
     $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath, '*');
     $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath, '*');
-    $text = "Total Tangkapan Satpam\n";
+    $rows = [];
 
     foreach ($threadIds as $threadId) {
         $warningCount = isset($totals[$threadId]) ? $totals[$threadId] : 0;
@@ -126,10 +154,10 @@ function satpamTotalText($bot, $chatId, $threadIds, $threadNames, $storagePath)
         }
 
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
-        $text .= $name.': '.$warningCount.' user, '.$violationCount." pelanggaran\n";
+        $rows[] = [$name, $warningCount, $violationCount];
     }
 
-    return $text;
+    return satpamRichTable('Total Tangkapan Satpam', ['Topik', 'User Kena Warning', 'Pelanggaran'], $rows, 'Data sepanjang waktu.');
 }
 
 $credentials = loadCredentials(__DIR__.'/x.c');
@@ -153,9 +181,11 @@ $lapakWarningText = 'Limit Lapak Member: setiap user maksimal %d pesan per hari.
 
 $bot->trackChatMessageStats($lapakMemberChatId, $lapakLimitStorage);
 
-$bot->cmd('/satpam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
-    return Bot::sendMessage(satpamCodeBlock(satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage)), [
-        'parse_mode' => 'markdown',
+$bot->cmd('oe', 'hadirr');
+
+$bot->cmd('/satpam|/satspam', function () use ($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage) {
+    return Bot::sendRichMessage([
+        'rich_message' => satpamSummaryRichMessage($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage),
         'reply' => true,
         'reply_markup' => satpamKeyboard(),
     ]);
@@ -171,20 +201,19 @@ $bot->on('callback', function ($data) use ($bot, $lapakMemberChatId, $lapakMembe
         return false;
     }
 
-    Bot::answerCallbackQuery($data == 'satpam:total' ? 'Data total' : 'Data hari ini');
+    Bot::answerCallbackQuery($data == 'satpam:summary' ? 'Data hari ini' : 'Data sepanjang waktu');
     if ($data == 'satpam:leaderboard') {
-        $text = satpamLeaderboardText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+        $richMessage = satpamLeaderboardRichMessage($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
     } elseif ($data == 'satpam:total') {
-        $text = satpamTotalText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+        $richMessage = satpamTotalRichMessage($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
     } else {
-        $text = satpamSummaryText($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
+        $richMessage = satpamSummaryRichMessage($bot, $lapakMemberChatId, $lapakMemberThreadIds, $lapakMemberThreadNames, $lapakLimitStorage);
     }
 
     return Bot::editMessageText([
         'chat_id' => $callback['message']['chat']['id'],
         'message_id' => $callback['message']['message_id'],
-        'text' => satpamCodeBlock($text),
-        'parse_mode' => 'markdown',
+        'rich_message' => $richMessage,
         'reply_markup' => satpamKeyboard(),
     ]);
 });
@@ -198,6 +227,8 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,
+        'ban_after_violations' => 3,
+        'ban_text' => 'mencapai %d pelanggaran dan telah dibanned.',
     ]);
 }
 

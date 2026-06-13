@@ -14,6 +14,7 @@ This project is based on PHPTelebot, with a small moderation layer added for Lap
 - Deletes the 3rd and later messages from the same user in the same topic on the same day.
 - Sends the warning as a reply to the violating user's message and mentions the user.
 - Throttles repeated warnings for the same user/topic to avoid warning spam during bursts.
+- Bans users after they reach 3 violations across all stored days and monitored topics.
 
 ```text
 Limit Lapak Member: setiap user maksimal 2 pesan per hari.
@@ -22,8 +23,8 @@ Limit Lapak Member: setiap user maksimal 2 pesan per hari.
 - Stores daily counters locally in SQLite at `runtime/lapak-member-limits.sqlite`.
 - Stores received group message volume per hour in SQLite for dashboard averages.
 - Tracks the number of unique users who received warnings in each monitored topic.
-- Provides `/satpam` to report today's warning totals per topic.
-- Adds inline buttons to `/satpam` for switching between today's summary, today's violation leaderboard, and retained total data.
+- Provides `/satpam` with native Telegram rich-message tables.
+- Adds inline buttons for today's summary, the all-time violation leaderboard, and all-time totals.
 - Ignores the runtime counter file through `.gitignore`.
 
 ## What Changed
