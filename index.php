@@ -59,9 +59,9 @@ function satpamRichEscape($value)
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function satpamRichTable($title, $headers, $rows, $footer)
+function satpamRichTable($title, $headers, $rows)
 {
-    $html = '<h2>'.satpamRichEscape($title).'</h2>';
+    $html = '<h3>'.satpamRichEscape($title).'</h3>';
     $html .= '<table bordered striped><tr>';
     foreach ($headers as $header) {
         $html .= '<th>'.satpamRichEscape($header).'</th>';
@@ -78,6 +78,13 @@ function satpamRichTable($title, $headers, $rows, $footer)
     }
 
     $html .= '</table>';
+
+    return $html;
+}
+
+function satpamRichMessage($title, $tables, $footer)
+{
+    $html = '<h2>'.satpamRichEscape($title).'</h2>'.$tables;
     if ($footer != '') {
         $html .= '<footer>'.satpamRichEscape($footer).'</footer>';
     }
@@ -104,45 +111,47 @@ function satpamKeyboard()
 function satpamSummaryRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
     $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath);
-    $rows = [];
+    $tables = '';
 
     foreach ($threadIds as $threadId) {
         $count = isset($totals[$threadId]) ? $totals[$threadId] : 0;
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
-        $rows[] = [$name, $count];
+        $tables .= satpamRichTable($name, ['User Kena Warning'], [[$count]]);
     }
 
-    return satpamRichTable('Tangkapan Satpam Hari Ini', ['Topik', 'User Kena Warning'], $rows, 'Batas: 2 pesan per user per topik per hari.');
+    return satpamRichMessage('Tangkapan Satpam Hari Ini', $tables, 'Batas: 2 pesan per user per topik per hari.');
 }
 
 function satpamLeaderboardRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
     $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath, '*');
-    $rows = [];
+    $tables = '';
 
     foreach ($threadIds as $threadId) {
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
+        $rows = [];
         if (!empty($violations[$threadId])) {
             $rank = 1;
             foreach ($violations[$threadId] as $violation) {
-                $rows[] = [$rank, $name, $violation['name'], $violation['count']];
+                $rows[] = [$rank, $violation['name'], $violation['count']];
                 $rank++;
             }
         }
+
+        if (empty($rows)) {
+            $rows[] = ['-', 'Belum ada pelanggar', 0];
+        }
+        $tables .= satpamRichTable($name, ['#', 'User', 'Pelanggaran'], $rows);
     }
 
-    if (empty($rows)) {
-        $rows[] = ['-', '-', 'Belum ada pelanggar', 0];
-    }
-
-    return satpamRichTable('Leaderboard Pelanggar', ['#', 'Topik', 'User', 'Pelanggaran'], $rows, 'Data sepanjang waktu. User dibanned setelah 3 pelanggaran.');
+    return satpamRichMessage('Leaderboard Pelanggar', $tables, 'Data sepanjang waktu. User dibanned setelah 3 pelanggaran.');
 }
 
 function satpamTotalRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
 {
     $totals = $bot->messageThreadLimitWarningTotals($chatId, $threadIds, $storagePath, '*');
     $violations = $bot->messageThreadLimitViolations($chatId, $threadIds, $storagePath, '*');
-    $rows = [];
+    $tables = '';
 
     foreach ($threadIds as $threadId) {
         $warningCount = isset($totals[$threadId]) ? $totals[$threadId] : 0;
@@ -154,10 +163,10 @@ function satpamTotalRichMessage($bot, $chatId, $threadIds, $threadNames, $storag
         }
 
         $name = isset($threadNames[$threadId]) ? $threadNames[$threadId] : 'Topik '.$threadId;
-        $rows[] = [$name, $warningCount, $violationCount];
+        $tables .= satpamRichTable($name, ['User Kena Warning', 'Pelanggaran'], [[$warningCount, $violationCount]]);
     }
 
-    return satpamRichTable('Total Tangkapan Satpam', ['Topik', 'User Kena Warning', 'Pelanggaran'], $rows, 'Data sepanjang waktu.');
+    return satpamRichMessage('Total Tangkapan Satpam', $tables, 'Data sepanjang waktu.');
 }
 
 $credentials = loadCredentials(__DIR__.'/x.c');
