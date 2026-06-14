@@ -157,8 +157,9 @@ class PHPTelebot
             'warning_cooldown' => isset($options['warning_cooldown']) ? (int) $options['warning_cooldown'] : 300,
             'mention_user' => isset($options['mention_user']) ? (bool) $options['mention_user'] : false,
             'whitelist_sender_tag' => isset($options['whitelist_sender_tag']) ? (bool) $options['whitelist_sender_tag'] : false,
-            'ban_after_violations' => isset($options['ban_after_violations']) ? (int) $options['ban_after_violations'] : 0,
-            'ban_text' => isset($options['ban_text']) ? $options['ban_text'] : 'User dibanned setelah mencapai %d pelanggaran.',
+            'mute_after_violations' => isset($options['mute_after_violations']) ? (int) $options['mute_after_violations'] : 0,
+            'mute_seconds' => isset($options['mute_seconds']) ? (int) $options['mute_seconds'] : 43200,
+            'mute_text' => isset($options['mute_text']) ? $options['mute_text'] : 'User dimute setelah mencapai %d pelanggaran.',
         ];
     }
 
@@ -676,21 +677,39 @@ class PHPTelebot
             $stmt = $db->prepare('UPDATE message_thread_limits SET name = ?, warned = 1, violation_count = violation_count + 1, last_warning = ? WHERE day = ? AND chat_id = ? AND thread_id = ? AND user_id = ?');
             $stmt->execute([$userName, $sendWarning ? time() : $lastWarnedAt, $day, $chatId, $threadId, $userId]);
 
-            if ($limit['ban_after_violations'] > 0) {
+            if ($limit['mute_after_violations'] > 0) {
                 $stmt = $db->prepare('SELECT COALESCE(SUM(violation_count), 0) FROM message_thread_limits WHERE chat_id = ? AND user_id = ?');
                 $stmt->execute([$chatId, $userId]);
                 $totalViolations = (int) $stmt->fetchColumn();
 
-                if ($totalViolations >= $limit['ban_after_violations']) {
-                    $banResult = json_decode(Bot::banChatMember([
+                if ($totalViolations >= $limit['mute_after_violations']) {
+                    $muteResult = json_decode(Bot::restrictChatMember([
                         'chat_id' => $message['chat']['id'],
                         'user_id' => $message['from']['id'],
+                        'permissions' => [
+                            'can_send_messages' => false,
+                            'can_send_audios' => false,
+                            'can_send_documents' => false,
+                            'can_send_photos' => false,
+                            'can_send_videos' => false,
+                            'can_send_video_notes' => false,
+                            'can_send_voice_notes' => false,
+                            'can_send_polls' => false,
+                            'can_send_other_messages' => false,
+                            'can_add_web_page_previews' => false,
+                            'can_change_info' => false,
+                            'can_invite_users' => false,
+                            'can_pin_messages' => false,
+                            'can_manage_topics' => false,
+                        ],
+                        'use_independent_chat_permissions' => true,
+                        'until_date' => time() + max(30, $limit['mute_seconds']),
                     ]), true);
 
-                    if (isset($banResult['ok']) && $banResult['ok']) {
+                    if (isset($muteResult['ok']) && $muteResult['ok']) {
                         $options = [
                             'chat_id' => $message['chat']['id'],
-                            'text' => sprintf($limit['ban_text'], $limit['ban_after_violations']),
+                            'text' => sprintf($limit['mute_text'], $limit['mute_after_violations']),
                         ];
                         if ($limit['mention_user']) {
                             $options['text'] = $this->messageThreadLimitUserMention($message['from']).' '.$options['text'];
@@ -708,7 +727,7 @@ class PHPTelebot
                             ]);
                         }
 
-                        return '-- Banned --';
+                        return '-- Muted --';
                     }
                 }
             }

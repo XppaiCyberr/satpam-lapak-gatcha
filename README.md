@@ -14,7 +14,7 @@ This project is based on PHPTelebot, with a small moderation layer added for Lap
 - Deletes the 3rd and later messages from the same user in the same topic on the same day.
 - Sends the warning as a reply to the violating user's message and mentions the user.
 - Throttles repeated warnings for the same user/topic to avoid warning spam during bursts.
-- Bans users after they reach 3 violations across all stored days and monitored topics.
+- Mutes users for 12 hours after they reach 3 violations across all stored days and monitored topics.
 
 ```text
 Limit Lapak Member: setiap user maksimal 2 pesan per hari.

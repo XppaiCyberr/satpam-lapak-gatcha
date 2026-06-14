@@ -144,7 +144,7 @@ function satpamLeaderboardRichMessage($bot, $chatId, $threadIds, $threadNames, $
         $tables .= satpamRichTable($name, ['#', 'User', 'Pelanggaran'], $rows);
     }
 
-    return satpamRichMessage('Leaderboard Pelanggar', $tables, 'Data sepanjang waktu. User dibanned setelah 3 pelanggaran.');
+    return satpamRichMessage('Leaderboard Pelanggar', $tables, 'Data sepanjang waktu. User dimute 12 jam setelah 3 pelanggaran.');
 }
 
 function satpamTotalRichMessage($bot, $chatId, $threadIds, $threadNames, $storagePath)
@@ -236,8 +236,9 @@ foreach ($lapakMemberThreadIds as $lapakMemberThreadId) {
         'warning_cooldown' => 300,
         'mention_user' => true,
         'whitelist_sender_tag' => true,
-        'ban_after_violations' => 3,
-        'ban_text' => 'mencapai %d pelanggaran dan telah dibanned.',
+        'mute_after_violations' => 3,
+        'mute_seconds' => 43200,
+        'mute_text' => 'mencapai %d pelanggaran dan telah dimute selama 12 jam.',
     ]);
 }
 
